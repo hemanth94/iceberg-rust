@@ -25,8 +25,6 @@ pub(crate) async fn main() {
             .unwrap(),
     );
 
-    println!("Created Catalog");
-
     let schema = Schema::builder()
         .with_schema_id(1)
         .with_fields(
@@ -72,16 +70,11 @@ pub(crate) async fn main() {
         .build()
         .unwrap();
 
-
-    println!("Created Schema");
-
     let partition_spec = PartitionSpecBuilder::default()
         .with_spec_id(1)
         .with_partition_field(PartitionField::new(4, 1000, "day", Transform::Day))
         .build()
         .expect("Failed to create partition spec");
-
-    println!("Created partition spec");
 
     let mut builder =
         TableBuilder::new("test.orders", catalog).expect("Failed to create table builder");
@@ -94,8 +87,6 @@ pub(crate) async fn main() {
     let table = Arc::new(DataFusionTable::from(
         builder.build().await.expect("Failed to create table."),
     ));
-
-    println!("Created Builder and Table");
 
     let ctx = SessionContext::new();
 

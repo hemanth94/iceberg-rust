@@ -13,4 +13,4 @@ edition = "2021"
 "iceberg-sql-catalog" = { path = "../iceberg-sql-catalog" }
 "object_store" = { version = "0.9", features = ["aws", "gcp"] }
 tokio = "1.36.0"
-datafusion = "36.0.0"
+datafusion = { path = "../../datafusion-36.0.0/datafusion/core" }
