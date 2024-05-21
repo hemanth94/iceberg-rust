@@ -78,12 +78,14 @@ pub(crate) async fn main() {
 
     let mut builder =
         TableBuilder::new("test.orders", catalog).expect("Failed to create table builder");
+
     builder
         .location("/test/orders")
         .with_schema((1, schema))
         .current_schema_id(1)
         .with_partition_spec((1, partition_spec))
         .default_spec_id(1);
+
     let table = Arc::new(DataFusionTable::from(
         builder.build().await.expect("Failed to create table."),
     ));
@@ -92,7 +94,7 @@ pub(crate) async fn main() {
 
     ctx.register_table("orders", table).unwrap();
 
-    ctx.sql(
+    let insert_plan = ctx.sql(
         "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES 
         (1, 1, 1, '2020-01-01', 1),
         (2, 2, 1, '2020-01-01', 1),
@@ -102,92 +104,125 @@ pub(crate) async fn main() {
         (6, 3, 3, '2020-02-02', 3);",
     )
     .await
-    .expect("Failed to create query plan for insert")
-    .collect()
+    .expect("Failed to create query plan for insert");
+
+    // println!("{:#?}", insert_plan);
+    
+    let _physical_imp = insert_plan.collect()
     .await
     .expect("Failed to insert values into table");
 
-    let batches = ctx
-        .sql("select product_id, sum(amount) from orders group by product_id;")
-        .await
-        .expect("Failed to create plan for select")
-        .collect()
-        .await
-        .expect("Failed to execute select query");
+    // println!("Physical Plan {:#?}", physical_imp);
 
-    for batch in batches {
-        if batch.num_rows() != 0 {
-            let (product_ids, amounts) = (
-                batch
-                    .column(0)
-                    .as_any()
-                    .downcast_ref::<Int64Array>()
-                    .unwrap(),
-                batch
-                    .column(1)
-                    .as_any()
-                    .downcast_ref::<Int64Array>()
-                    .unwrap(),
-            );
-            for (product_id, amount) in product_ids.iter().zip(amounts) {
-                if product_id.unwrap() == 1 {
-                    assert_eq!(amount.unwrap(), 7)
-                } else if product_id.unwrap() == 2 {
-                    assert_eq!(amount.unwrap(), 1)
-                } else if product_id.unwrap() == 3 {
-                    assert_eq!(amount.unwrap(), 3)
-                } else {
-                    panic!("Unexpected product id")
-                }
-            }
-        }
-    }
+    // let batches = ctx
+    //     .sql("select product_id, sum(amount) from orders group by product_id;")
+    //     .await
+    //     .expect("Failed to create plan for select")
+    //     .collect()
+    //     .await
+    //     .expect("Failed to execute select query");
 
-    ctx.sql(
-        "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES 
-        (7, 1, 3, '2020-01-03', 1),
-        (8, 2, 1, '2020-01-03', 2),
-        (9, 2, 2, '2020-01-03', 1);",
-    )
-    .await
-    .expect("Failed to create query plan for insert")
-    .collect()
-    .await
-    .expect("Failed to insert values into table");
+    // for batch in batches {
+    //     if batch.num_rows() != 0 {
+    //         let (product_ids, amounts) = (
+    //             batch
+    //                 .column(0)
+    //                 .as_any()
+    //                 .downcast_ref::<Int64Array>()
+    //                 .unwrap(),
+    //             batch
+    //                 .column(1)
+    //                 .as_any()
+    //                 .downcast_ref::<Int64Array>()
+    //                 .unwrap(),
+    //         );
+    //         for (product_id, amount) in product_ids.iter().zip(amounts) {
+    //             if product_id.unwrap() == 1 {
+    //                 assert_eq!(amount.unwrap(), 7)
+    //             } else if product_id.unwrap() == 2 {
+    //                 assert_eq!(amount.unwrap(), 1)
+    //             } else if product_id.unwrap() == 3 {
+    //                 assert_eq!(amount.unwrap(), 3)
+    //             } else {
+    //                 panic!("Unexpected product id")
+    //             }
+    //         }
+    //     }
+    // }
 
-    let batches = ctx
-        .sql("select product_id, sum(amount) from orders group by product_id;")
-        .await
-        .expect("Failed to create plan for select")
-        .collect()
-        .await
-        .expect("Failed to execute select query");
+    let updated_dataframe = ctx.sql(
+        "SELECT * from orders WHERE customer_id=1;"
+    ).await.expect("Failed to create SELECT Query Plan");
 
-    for batch in batches {
-        if batch.num_rows() != 0 {
-            let (product_ids, amounts) = (
-                batch
-                    .column(0)
-                    .as_any()
-                    .downcast_ref::<Int64Array>()
-                    .unwrap(),
-                batch
-                    .column(1)
-                    .as_any()
-                    .downcast_ref::<Int64Array>()
-                    .unwrap(),
-            );
-            for (product_id, amount) in product_ids.iter().zip(amounts) {
-                if product_id.unwrap() == 1 {
-                    assert_eq!(amount.unwrap(), 9)
-                } else if product_id.unwrap() == 2 {
-                    assert_eq!(amount.unwrap(), 2)
-                } else if product_id.unwrap() == 3 {
-                    assert_eq!(amount.unwrap(), 4)
-                } else {
-                    panic!("Unexpected product id")
-                }
-            }
-        }
-    }
+
+    updated_dataframe.show().await.expect("msg");
+
+    // UPDATE Query Sample
+    // let dataframe = ctx.sql("
+    // EXPLAIN UPDATE orders \
+    // SET \
+    //     amount=10 \
+    // WHERE \
+    //     customer_id=1
+    // ").await.expect("Failed to create query plan for update");
+    
+    // // println!("dataframe : logical plan for UPDATE Query {:#?}", dataframe);
+
+    // dataframe.show().await.expect("update query plan failed");
+
+    // println!("Physical Plan for UPDATE Query {:#?}", result);
+
+    // let updated_dataframe = ctx.sql(
+    //     "SELECT * from orders WHERE customer_id=1;"
+    // ).await.expect("Failed to create SELECT Query Plan");
+
+    // updated_dataframe.show().await.expect("Failed to update");
+
+    // ctx.sql(
+    //     "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES 
+    //     (7, 1, 3, '2020-01-03', 1),
+    //     (8, 2, 1, '2020-01-03', 2),
+    //     (9, 2, 2, '2020-01-03', 1);",
+    // )
+    // .await
+    // .expect("Failed to create query plan for insert")
+    // .collect()
+    // .await
+    // .expect("Failed to insert values into table");
+
+    // let batches = ctx
+    //     .sql("select product_id, sum(amount) from orders group by product_id;")
+    //     .await
+    //     .expect("Failed to create plan for select")
+    //     .collect()
+    //     .await
+    //     .expect("Failed to execute select query");
+
+    // for batch in batches {
+    //     if batch.num_rows() != 0 {
+    //         let (product_ids, amounts) = (
+    //             batch
+    //                 .column(0)
+    //                 .as_any()
+    //                 .downcast_ref::<Int64Array>()
+    //                 .unwrap(),
+    //             batch
+    //                 .column(1)
+    //                 .as_any()
+    //                 .downcast_ref::<Int64Array>()
+    //                 .unwrap(),
+    //         );
+    //         for (product_id, amount) in product_ids.iter().zip(amounts) {
+    //             if product_id.unwrap() == 1 {
+    //                 assert_eq!(amount.unwrap(), 9)
+    //             } else if product_id.unwrap() == 2 {
+    //                 assert_eq!(amount.unwrap(), 2)
+    //             } else if product_id.unwrap() == 3 {
+    //                 assert_eq!(amount.unwrap(), 4)
+    //             } else {
+    //                 panic!("Unexpected product id")
+    //             }
+    //         }
+    //     }
+    // }
 }

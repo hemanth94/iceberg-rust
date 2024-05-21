@@ -1,0 +1,214 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'scratch-bin-files'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=scratch-bin-files",
+                    "--package=scratch-bin-files"
+                ],
+                "filter": {
+                    "name": "scratch-bin-files",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'scratch-bin-files'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=scratch-bin-files",
+                    "--package=scratch-bin-files"
+                ],
+                "filter": {
+                    "name": "scratch-bin-files",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'datafusion-iceberg-sql'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=datafusion-iceberg-sql"
+                ],
+                "filter": {
+                    "name": "datafusion-iceberg-sql",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'iceberg-rust'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=iceberg-rust"
+                ],
+                "filter": {
+                    "name": "iceberg-rust",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'iceberg-rust-spec'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=iceberg-rust-spec"
+                ],
+                "filter": {
+                    "name": "iceberg-rust-spec",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'datafusion_iceberg'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=datafusion_iceberg"
+                ],
+                "filter": {
+                    "name": "datafusion_iceberg",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'insert_table'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=insert_table",
+                    "--package=datafusion_iceberg"
+                ],
+                "filter": {
+                    "name": "insert_table",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'insert_table'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=insert_table",
+                    "--package=datafusion_iceberg"
+                ],
+                "filter": {
+                    "name": "insert_table",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'refresh_materialized_view'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=refresh_materialized_view",
+                    "--package=datafusion_iceberg"
+                ],
+                "filter": {
+                    "name": "refresh_materialized_view",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'refresh_materialized_view'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=refresh_materialized_view",
+                    "--package=datafusion_iceberg"
+                ],
+                "filter": {
+                    "name": "refresh_materialized_view",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'iceberg-sql-catalog'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=iceberg-sql-catalog"
+                ],
+                "filter": {
+                    "name": "iceberg-sql-catalog",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

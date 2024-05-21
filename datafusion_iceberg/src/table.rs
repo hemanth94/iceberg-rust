@@ -31,7 +31,8 @@ use datafusion::{
     physical_expr::create_physical_expr,
     physical_optimizer::pruning::PruningPredicate,
     physical_plan::{
-        insert::{DataSink, DataSinkExec},
+        insert::{DataSink, FileSinkExec},
+        upsert::UpdateSinkExec,
         metrics::MetricsSet,
         DisplayAs, DisplayFormatType, ExecutionPlan, SendableRecordBatchStream, Statistics,
     },
@@ -145,12 +146,15 @@ impl TableProvider for DataFusionTable {
     fn as_any(&self) -> &dyn Any {
         &self.tabular
     }
+
     fn schema(&self) -> SchemaRef {
         self.schema.clone()
     }
+
     fn table_type(&self) -> TableType {
         TableType::Base
     }
+
     async fn scan(
         &self,
         session: &SessionState,
@@ -208,6 +212,7 @@ impl TableProvider for DataFusionTable {
             }
         }
     }
+
     async fn insert_into(
         &self,
         _state: &SessionState,
@@ -229,6 +234,7 @@ impl TableProvider for DataFusionTable {
             None,
         )))
     }
+
     fn supports_filters_pushdown(
         &self,
         filters: &[&Expr],
@@ -237,6 +243,29 @@ impl TableProvider for DataFusionTable {
             .iter()
             .map(|_| TableProviderFilterPushDown::Inexact)
             .collect())
+    }
+
+    async fn update_table(
+        &self,
+        _state: &SessionState,
+        input: Arc<dyn ExecutionPlan>,
+        overwrite: bool,
+    ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
+        // Create a physical plan from the logical plan.
+        // Check that the schema of the plan matches the schema of this table.
+        println!("Input {:#?}", input);
+        if !self.schema().equivalent_names_and_types(&input.schema()) {
+            return plan_err!("Update query must have the same schema with the table.");
+        }
+        if overwrite {
+            return not_impl_err!("Overwrite not implemented for MemoryTable yet");
+        }
+        Ok(Arc::new(UpdateSinkExec::new(
+            input,
+            Arc::new(self.clone().into_data_sink()),
+            self.schema.clone(),
+            None,
+        )))
     }
 }
 

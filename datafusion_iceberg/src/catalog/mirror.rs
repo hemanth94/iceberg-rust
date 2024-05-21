@@ -182,7 +182,7 @@ impl Mirror {
             Node::Namespace(namespace) => {
                 namespace.insert(identifier.to_string());
             }
-            Node::Relation(_) => {}
+            Node::Relation(_identifier) => {}
         };
         let pool = LocalPool::new();
         let spawner = pool.spawner();
@@ -244,7 +244,7 @@ impl Mirror {
             Node::Namespace(namespace) => {
                 namespace.remove(&identifier.to_string());
             }
-            Node::Relation(_) => {}
+            Node::Relation(_identifier) => {}
         };
         let pool = LocalPool::new();
         let spawner = pool.spawner();
