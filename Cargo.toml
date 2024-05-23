@@ -21,10 +21,10 @@ async-trait = "0.1"
 chrono = { version = "0.4", default-features = false, features = ["serde"] }
 arrow = "51.0.0"
 arrow-schema = "51.0.0"
-datafusion = { path = "../datafusion-36.0.0/datafusion/core" }
-datafusion-sql = { path = "../datafusion-36.0.0/datafusion/sql" }
-datafusion-expr = { path = "../datafusion-36.0.0/datafusion/expr" }
-datafusion-common = { path = "../datafusion-36.0.0/datafusion/common" }
+datafusion = { path = "../datafusion/datafusion/core" }
+datafusion-sql = { path = "../datafusion/datafusion/sql" }
+datafusion-expr = { path = "../datafusion/datafusion/expr" }
+datafusion-common = { path = "../datafusion/datafusion/common" }
 parquet = { version = "51.0.0", features = ["async", "object_store"] }
 sqlparser = { version = "0.45.0", features = ["visitor"] }
 thiserror = "1.0"

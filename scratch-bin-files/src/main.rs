@@ -1,4 +1,4 @@
-use datafusion::{arrow::array::Int64Array, prelude::SessionContext};
+use datafusion::{prelude::SessionContext};
 use datafusion_iceberg::DataFusionTable;
 use iceberg_rust::{
     catalog::Catalog,
