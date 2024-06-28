@@ -1,4 +1,4 @@
-use datafusion::{prelude::SessionContext};
+use datafusion::prelude::SessionContext;
 use datafusion_iceberg::DataFusionTable;
 use iceberg_rust::{
     catalog::Catalog,
@@ -94,7 +94,7 @@ pub(crate) async fn main() {
 
     ctx.register_table("orders", table).unwrap();
 
-    let insert_plan = ctx.sql(
+    ctx.sql(
         "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES 
         (1, 1, 1, '2020-01-01', 1),
         (2, 2, 1, '2020-01-01', 1),
@@ -104,125 +104,86 @@ pub(crate) async fn main() {
         (6, 3, 3, '2020-02-02', 3);",
     )
     .await
-    .expect("Failed to create query plan for insert");
-
-    // println!("{:#?}", insert_plan);
-    
-    let _physical_imp = insert_plan.collect()
+    .expect("Failed to create query plan for insert")
+    .collect()
     .await
-    .expect("Failed to insert values into table");
+    .expect("");
 
-    // println!("Physical Plan {:#?}", physical_imp);
+    ctx.sql(
+        "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES 
+        (7, 3, 2, '2020-03-03', 1),
+        (8, 3, 1, '2020-03-03', 2),
+        (9, 2, 3, '2020-03-03', 3);",
+    )
+    .await
+    .expect("Failed to create query plan for insert")
+    .collect()
+    .await
+    .expect("");
 
-    // let batches = ctx
-    //     .sql("select product_id, sum(amount) from orders group by product_id;")
-    //     .await
-    //     .expect("Failed to create plan for select")
-    //     .collect()
-    //     .await
-    //     .expect("Failed to execute select query");
+    // // SHOW FULL TABLE
+    // ctx.sql("SELECT * from orders;")
+    // .await
+    // .expect("Failed to create SELECT Query Plan")
+    // .show()
+    // .await
+    // .expect("Failed to execute SELECT execution plan");
 
-    // for batch in batches {
-    //     if batch.num_rows() != 0 {
-    //         let (product_ids, amounts) = (
-    //             batch
-    //                 .column(0)
-    //                 .as_any()
-    //                 .downcast_ref::<Int64Array>()
-    //                 .unwrap(),
-    //             batch
-    //                 .column(1)
-    //                 .as_any()
-    //                 .downcast_ref::<Int64Array>()
-    //                 .unwrap(),
-    //         );
-    //         for (product_id, amount) in product_ids.iter().zip(amounts) {
-    //             if product_id.unwrap() == 1 {
-    //                 assert_eq!(amount.unwrap(), 7)
-    //             } else if product_id.unwrap() == 2 {
-    //                 assert_eq!(amount.unwrap(), 1)
-    //             } else if product_id.unwrap() == 3 {
-    //                 assert_eq!(amount.unwrap(), 3)
-    //             } else {
-    //                 panic!("Unexpected product id")
-    //             }
-    //         }
-    //     }
-    // }
-
-    let updated_dataframe = ctx.sql(
-        "SELECT * from orders WHERE customer_id=1;"
-    ).await.expect("Failed to create SELECT Query Plan");
-
-
-    updated_dataframe.show().await.expect("msg");
-
-    // UPDATE Query Sample
-    // let dataframe = ctx.sql("
-    // EXPLAIN UPDATE orders \
-    // SET \
-    //     amount=10 \
+    // FILTER QUERY SAMPLE
+    // ctx.sql("
+    // SELECT * FROM orders
     // WHERE \
-    //     customer_id=1
-    // ").await.expect("Failed to create query plan for update");
-    
-    // // println!("dataframe : logical plan for UPDATE Query {:#?}", dataframe);
-
-    // dataframe.show().await.expect("update query plan failed");
-
-    // println!("Physical Plan for UPDATE Query {:#?}", result);
-
-    // let updated_dataframe = ctx.sql(
-    //     "SELECT * from orders WHERE customer_id=1;"
-    // ).await.expect("Failed to create SELECT Query Plan");
-
-    // updated_dataframe.show().await.expect("Failed to update");
-
-    // ctx.sql(
-    //     "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES 
-    //     (7, 1, 3, '2020-01-03', 1),
-    //     (8, 2, 1, '2020-01-03', 2),
-    //     (9, 2, 2, '2020-01-03', 1);",
-    // )
+    //     customer_id=10
+    // ")
     // .await
-    // .expect("Failed to create query plan for insert")
-    // .collect()
+    // .expect("Failed to create query plan for update")
+    // .show()
     // .await
-    // .expect("Failed to insert values into table");
+    // .expect("Failed to execute Query Execution Plan");
 
-    // let batches = ctx
-    //     .sql("select product_id, sum(amount) from orders group by product_id;")
-    //     .await
-    //     .expect("Failed to create plan for select")
-    //     .collect()
-    //     .await
-    //     .expect("Failed to execute select query");
 
-    // for batch in batches {
-    //     if batch.num_rows() != 0 {
-    //         let (product_ids, amounts) = (
-    //             batch
-    //                 .column(0)
-    //                 .as_any()
-    //                 .downcast_ref::<Int64Array>()
-    //                 .unwrap(),
-    //             batch
-    //                 .column(1)
-    //                 .as_any()
-    //                 .downcast_ref::<Int64Array>()
-    //                 .unwrap(),
-    //         );
-    //         for (product_id, amount) in product_ids.iter().zip(amounts) {
-    //             if product_id.unwrap() == 1 {
-    //                 assert_eq!(amount.unwrap(), 9)
-    //             } else if product_id.unwrap() == 2 {
-    //                 assert_eq!(amount.unwrap(), 2)
-    //             } else if product_id.unwrap() == 3 {
-    //                 assert_eq!(amount.unwrap(), 4)
-    //             } else {
-    //                 panic!("Unexpected product id")
-    //             }
-    //         }
-    //     }
-    // }
+    // DELETE Query Sample
+    ctx.sql("
+    DELETE FROM orders
+    WHERE \
+        customer_id=1
+    ")
+    .await
+    .expect("Failed to create query plan for update")
+    .collect()
+    .await
+    .expect("Failed to execute Query Execution Plan");
+
+
+    ctx.sql(
+        "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES 
+        (10, 3, 2, '2020-03-03', 1),
+        (11, 3, 1, '2020-03-03', 2),
+        (12, 2, 3, '2020-03-03', 3);",
+    )
+    .await
+    .expect("Failed to create query plan for insert")
+    .collect()
+    .await
+    .expect("");
+
+    ctx.sql("SELECT * from orders;")
+    .await
+    .expect("Failed to create SELECT Query Plan")
+    .show()
+    .await
+    .expect("Failed to execute SELECT Query Execution Plan");
+
+    // FILTER Query Sample
+    ctx.sql("
+    SELECT * FROM orders
+    WHERE \
+        customer_id=2
+    ")
+    .await
+    .expect("Failed to create query plan for update")
+    .show()
+    .await
+    .expect("Failed to execute Query Execution Plan");
+
 }

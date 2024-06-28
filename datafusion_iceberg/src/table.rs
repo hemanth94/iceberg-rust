@@ -28,11 +28,11 @@ use datafusion::{
     },
     execution::{context::SessionState, TaskContext},
     logical_expr::{TableProviderFilterPushDown, TableType},
-    physical_expr::create_physical_expr,
+    physical_expr::{create_physical_expr, PhysicalExpr},
     physical_optimizer::pruning::PruningPredicate,
     physical_plan::{
         insert::{DataSink, DataSinkExec},
-        upsert::UpdateSinkExec,
+        upsert::{OverwriteSink, UpdateSinkExec},
         metrics::MetricsSet,
         DisplayAs, DisplayFormatType, ExecutionPlan, SendableRecordBatchStream, Statistics,
     },
@@ -43,13 +43,13 @@ use datafusion::{
 
 use crate::{
     error::Error,
-    pruning_statistics::{PruneDataFiles, PruneManifests},
     statistics::manifest_statistics,
 };
 
 use iceberg_rust::{
     arrow::write::write_parquet_partitioned, catalog::tabular::Tabular,
     materialized_view::MaterializedView, table::Table, view::View,
+    table::pruning_statistics::{PruneDataFiles, PruneManifests},
 };
 use iceberg_rust_spec::spec::{
     schema::Schema,
@@ -61,6 +61,18 @@ use iceberg_rust_spec::util;
 
 #[derive(Debug, Clone)]
 /// Iceberg table for datafusion
+/// A struct representing an Iceberg table in the DataFusion runtime.
+///
+/// This struct holds the underlying Iceberg `Tabular` object, the schema of the table,
+/// the snapshot range (start and end versions), and the branch name.
+///
+/// The `tabular` field is an `Arc<RwLock<Tabular>>`, which allows concurrent access to the
+/// underlying Iceberg table. The `schema` field is a `SchemaRef`, which represents the
+/// schema of the table.
+///
+/// The `snapshot_range` field is a tuple of two optional `i64` values, representing the
+/// start and end versions of the table snapshot. The `branch` field is an optional `String`
+/// representing the branch name of the table.
 pub struct DataFusionTable {
     pub tabular: Arc<RwLock<Tabular>>,
     pub schema: SchemaRef,
@@ -162,7 +174,9 @@ impl TableProvider for DataFusionTable {
         filters: &[Expr],
         limit: Option<usize>,
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
-        match self.tabular.read().await.deref() {
+        let table_state = self.tabular.read().await;
+
+        match table_state.deref() {
             Tabular::View(view) => {
                 let metadata = view.metadata();
                 let version = self
@@ -251,15 +265,43 @@ impl TableProvider for DataFusionTable {
         input: Arc<dyn ExecutionPlan>,
         overwrite: bool,
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
-        // Create a physical plan from the logical plan.
+        // Create Physical Execution Plan for UPDATE node 
+        // on top of Physical Execution Plan of child nodes
+
         // Check that the schema of the plan matches the schema of this table.
-        println!("Input {:#?}", input);
         if !self.schema().equivalent_names_and_types(&input.schema()) {
-            return plan_err!("Update query must have the same schema with the table.");
+            return plan_err!("Updating query must have the same schema with the table.");
         }
         if overwrite {
             return not_impl_err!("Overwrite not implemented for MemoryTable yet");
         }
+        // return Physical Execution Plan
+        Ok(Arc::new(UpdateSinkExec::new(
+            input,
+            Arc::new(self.clone().into_data_sink()),
+            self.schema.clone(),
+            None,
+        )))
+    }
+
+    async fn delete_from_table(
+        &self,
+        _state: &SessionState,
+        input: Arc<dyn ExecutionPlan>,
+        overwrite: bool,
+    ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
+        // Create Physical Execution Plan for UPDATE node 
+        // on top of Physical Execution Plan of child nodes
+
+        // Check that the schema of the plan matches the schema of this table.
+        if !self.schema().equivalent_names_and_types(&input.schema()) {
+            return plan_err!("Delete query must have the same schema with the table.");
+        }
+        if overwrite {
+            return not_impl_err!("Overwrite not implemented for MemoryTable yet");
+        }
+        // return Physical Execution Plan with a sink
+        // Sink will be executed, and written into RecordBatches
         Ok(Arc::new(UpdateSinkExec::new(
             input,
             Arc::new(self.clone().into_data_sink()),
@@ -270,6 +312,16 @@ impl TableProvider for DataFusionTable {
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Scans an Iceberg table and returns an `ExecutionPlan` that can be used to execute the scan.
+///
+/// This function takes in various parameters to configure the scan, including 
+/// the table, snapshot range, schema, statistics, session state, projection, filters, and limit. 
+/// It then constructs a `FileScanConfig` based on these parameters and uses the 
+/// `ParquetFormat` to create the physical execution plan.
+///
+/// The function first checks if there are any filters on the partition columns and prunes the manifest files accordingly. 
+/// It then prunes the data files based on the pruning statistics in the manifest files. 
+/// Finally, it constructs the `FileScanConfig` and returns the physical execution plan.
 async fn table_scan(
     table: &Table,
     snapshot_range: &(Option<i64>, Option<i64>),
@@ -284,7 +336,7 @@ async fn table_scan(
         .1
         .and_then(|snapshot_id| table.metadata().schema(snapshot_id).ok().cloned())
         .unwrap_or_else(|| table.current_schema(None).unwrap().clone());
-
+    
     // Create a unique URI for this particular object store
     let object_store_url = ObjectStoreUrl::parse(
         "iceberg://".to_owned() + &util::strip_prefix(&table.metadata().location).replace('/', "-"),
@@ -326,6 +378,7 @@ async fn table_scan(
     } else {
         None
     };
+
     if let Some(physical_predicate) = physical_predicate.clone() {
         let partition_predicates = conjunction(
             filters
@@ -587,7 +640,7 @@ impl DataSink for IcebergDataSink {
 
         let object_store = table.object_store().clone();
 
-        let metadata_files = write_parquet_partitioned(
+        let datafiles = write_parquet_partitioned(
             table.metadata(),
             data.map_err(Into::into),
             object_store,
@@ -597,15 +650,61 @@ impl DataSink for IcebergDataSink {
 
         table
             .new_transaction(self.0.branch.as_deref())
-            .append(metadata_files)
+            .append(datafiles)
             .commit()
             .await
             .map_err(Into::<Error>::into)?;
 
         Ok(0)
     }
+
     fn metrics(&self) -> Option<MetricsSet> {
         None
+    }
+}
+
+
+#[async_trait]
+impl OverwriteSink for IcebergDataSink {
+    fn as_any(&self) -> &dyn Any {
+        self.0.as_any()
+    }
+
+    fn metrics(&self) -> Option<MetricsSet> {
+        None
+    }
+
+    async fn overwrite_with(
+        &self,
+        data: SendableRecordBatchStream,
+        _context: &Arc<TaskContext>,
+        filter: Option<Arc<dyn PhysicalExpr>>,
+    ) -> Result<u64, DataFusionError> {
+        let mut lock = self.0.tabular.write().await;
+        let table = if let Tabular::Table(table) = lock.deref_mut() {
+            Ok(table)
+        } else {
+            Err(Error::InvalidFormat("database entity".to_string()))
+        }
+        .map_err(Into::<Error>::into)?;
+
+        let object_store = table.object_store().clone();
+
+        let new_files = write_parquet_partitioned(
+            table.metadata(),
+            data.map_err(Into::into),
+            object_store,
+            self.0.branch.as_deref(),
+        )
+        .await?;
+
+        // STEP 1 : Delete the files where rows need to be changed
+        // STEP 2 : Append the new files
+        table.new_transaction(self.0.branch.as_deref())
+        .overwrite(filter, new_files)
+        .commit().await.map_err(Into::<Error>::into)?;
+
+        Ok(0)
     }
 }
 

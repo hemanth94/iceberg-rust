@@ -2023,6 +2023,8 @@ dependencies = [
  "apache-avro",
  "arrow",
  "async-trait",
+ "datafusion",
+ "datafusion-expr",
  "derive_builder",
  "futures",
  "getrandom",

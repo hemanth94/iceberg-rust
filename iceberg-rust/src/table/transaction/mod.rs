@@ -2,11 +2,14 @@
  * Defines the [Transaction] type that performs multiple [Operation]s with ACID properties.
 */
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use iceberg_rust_spec::spec::{
     manifest::DataFile, materialized_view_metadata::SourceTable, schema::Schema,
     snapshot::SnapshotReference,
 };
+
+use datafusion::physical_expr::PhysicalExpr;
 
 use crate::{catalog::commit::CommitTable, error::Error, table::Table};
 
@@ -18,6 +21,7 @@ pub(crate) mod operation;
 
 pub(crate) static APPEND_KEY: &str = "append";
 pub(crate) static REWRITE_KEY: &str = "rewrite";
+pub(crate) static OVERWRITE_KEY: &str = "overwrite";
 pub(crate) static ADD_SCHEMA_KEY: &str = "add-schema";
 pub(crate) static SET_DEFAULT_SPEC_KEY: &str = "set-default-spec";
 pub(crate) static UPDATE_PROPERTIES_KEY: &str = "update-properties";
@@ -74,7 +78,20 @@ impl<'table> TableTransaction<'table> {
             });
         self
     }
-    /// Quickly append files to the table
+    /// Quickly Update table for UPDATE/DELETE operations
+    pub fn overwrite(mut self, filter: Option<Arc<dyn PhysicalExpr>>, new_files: Vec<DataFile> ) -> Self {
+        self.operations.insert(
+            OVERWRITE_KEY.to_owned(),
+            Operation::Filter {
+                branch: self.branch.clone(),
+                filter,
+                lineage: None,
+                new_files
+            }
+        );
+        self
+    }
+    /// Quickly rewrite files on the table
     pub fn rewrite(mut self, files: Vec<DataFile>) -> Self {
         self.operations
             .entry(REWRITE_KEY.to_owned())
@@ -95,7 +112,7 @@ impl<'table> TableTransaction<'table> {
             });
         self
     }
-    /// Quickly append files to the table
+    /// Quickly rewrite files on the table while preserving lineage
     pub fn rewrite_with_lineage(mut self, files: Vec<DataFile>, lineage: Vec<SourceTable>) -> Self {
         self.operations
             .entry(REWRITE_KEY.to_owned())
@@ -144,7 +161,8 @@ impl<'table> TableTransaction<'table> {
         let identifier = self.table.identifier.clone();
 
         // Save old metadata to be able to remove old data after a rewrite operation
-        let delete_data = if self.operations.values().any(|x| {
+        let delete_data = if self.operations.values().any(
+            |x| {
             matches!(
                 x,
                 Operation::Rewrite {
@@ -152,8 +170,8 @@ impl<'table> TableTransaction<'table> {
                     files: _,
                     lineage: _,
                 }
-            )
-        }) {
+            )}
+        ) {
             Some(self.table.metadata())
         } else {
             None
@@ -163,8 +181,16 @@ impl<'table> TableTransaction<'table> {
         let (mut requirements, mut updates) = (Vec::new(), Vec::new());
         for operation in self.operations.into_values() {
             let (requirement, update) = operation
-                .execute(self.table.metadata(), self.table.object_store())
-                .await?;
+                .execute(
+                    self.table,
+                    self.table.metadata(),
+                    self.table.object_store()
+                )
+                .await
+                .map_err(|e| {
+                     println!("Error executing table operation: {:?}", e);
+                     e
+                 })?;
 
             if let Some(requirement) = requirement {
                 requirements.push(requirement);

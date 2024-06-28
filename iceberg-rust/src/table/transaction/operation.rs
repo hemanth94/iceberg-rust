@@ -8,6 +8,9 @@ use std::{
 };
 
 use apache_avro::from_value;
+use datafusion::physical_plan::PhysicalExpr;
+use datafusion::arrow::datatypes::SchemaRef;
+use datafusion::physical_optimizer::pruning::PruningPredicate;
 use futures::{lock::Mutex, stream, StreamExt, TryStreamExt};
 use iceberg_rust_spec::spec::{
     manifest::{partition_value_schema, Content, DataFile, ManifestEntry, ManifestWriter, Status},
@@ -23,7 +26,12 @@ use iceberg_rust_spec::spec::{
     values::{Struct, Value},
 };
 use iceberg_rust_spec::util::strip_prefix;
-use iceberg_rust_spec::{error::Error as SpecError, spec::table_metadata::TableMetadata};
+use iceberg_rust_spec::{
+    error::Error as SpecError,
+    spec::table_metadata::TableMetadata,
+};
+use crate::table::Table;
+use crate::table::pruning_statistics::PruneDataFiles;
 use object_store::ObjectStore;
 
 use crate::{
@@ -65,12 +73,16 @@ pub enum Operation {
     },
     // /// Replace manifests files and commit
     // RewriteManifests,
-    // /// Replace files in the table by a filter expression
-    // NewOverwrite,
+    /// /// Delete files in the table, based on a filter
+    /// and Commit. This is a precursor to the DELETE, UPDATE operations
+    Filter{
+        branch: Option<String>,
+        filter: Option<Arc<dyn PhysicalExpr>>,
+        lineage: Option<Vec<SourceTable>>,
+        new_files: Vec<DataFile>,
+    },
     // /// Remove or replace rows in existing data files
     // NewRowDelta,
-    // /// Delete files in the table and commit
-    // NewDelete,
     // /// Expire snapshots in the table
     // ExpireSnapshots,
     // /// Manage snapshots in the table
@@ -82,6 +94,7 @@ pub enum Operation {
 impl Operation {
     pub async fn execute(
         self,
+        table: &Table,
         table_metadata: &TableMetadata,
         object_store: Arc<dyn ObjectStore>,
     ) -> Result<(Option<TableRequirement>, Vec<TableUpdate>), Error> {
@@ -95,15 +108,20 @@ impl Operation {
                 let schema = table_metadata.current_schema(branch.as_deref())?;
                 let old_snapshot = table_metadata.current_snapshot(branch.as_deref())?;
 
-                let datafiles = Arc::new(files.into_iter().map(Ok::<_, Error>).try_fold(
-                    HashMap::<Struct, Vec<DataFile>>::new(),
-                    |mut acc, x| {
-                        let x = x?;
-                        let partition_value = x.partition().clone();
-                        acc.entry(partition_value).or_default().push(x);
-                        Ok::<_, Error>(acc)
-                    },
-                )?);
+                let datafiles = Arc::new(
+                    files
+                    .into_iter()
+                    .map(Ok::<_, Error>)
+                    .try_fold(
+                        HashMap::<Struct, Vec<DataFile>>::new(),
+                        |mut acc, x| {
+                            let x = x?;
+                            let partition_value = x.partition().clone();
+                            acc.entry(partition_value).or_default().push(x);
+                            Ok::<_, Error>(acc)
+                        },
+                    )?
+                );
 
                 let manifest_list_schema =
                     ManifestListEntry::schema(&table_metadata.format_version)?;
@@ -118,22 +136,34 @@ impl Operation {
                 let old_manifest_list_location = old_snapshot.map(|x| x.manifest_list()).cloned();
 
                 let manifest_list_bytes = match old_manifest_list_location {
-                    Some(old_manifest_list_location) => Some(
-                        object_store
-                            .get(&strip_prefix(&old_manifest_list_location).as_str().into())
-                            .await?
-                            .bytes()
-                            .await?,
-                    ),
+                    Some(old_manifest_list_location) =>{
+                        match object_store.get(&strip_prefix(&old_manifest_list_location).as_str().into()).await {
+                            Ok(manifest) => {
+                                Some(manifest.bytes().await?)
+                            },
+                            Err(e) => {
+                                println!("LOG :: Error Reading Manifest List {}", e);
+                                None
+                            }
+                        }
+                    },
                     None => None,
                 };
+
                 // Check if file has content "null", if so manifest_list file is empty
                 let existing_manifest_iter = if let Some(manifest_list_bytes) = &manifest_list_bytes
                 {
                     let manifest_list_reader =
-                        apache_avro::Reader::new(manifest_list_bytes.as_ref())?;
-
-                    Some(stream::iter(manifest_list_reader).filter_map(|manifest| {
+                        match apache_avro::Reader::new(manifest_list_bytes.as_ref()) {
+                            Ok(manifest_list_reader) => manifest_list_reader,
+                            Err(e) => {
+                                println!("LOG :: Error Reading Manifest List {}", e);
+                                return Err(e.into());
+                            }
+                        };
+                    
+                    Some(stream::iter(manifest_list_reader)
+                    .filter_map(|manifest| {
                         let datafiles = datafiles.clone();
                         let existing_partitions = existing_partitions.clone();
                         async move {
@@ -184,7 +214,8 @@ impl Operation {
                     + &uuid::Uuid::new_v4().to_string()
                     + ".avro";
 
-                let new_manifest_iter = stream::iter(datafiles.iter().enumerate()).filter_map(
+                let new_manifest_iter = stream::iter(datafiles.iter().enumerate())
+                .filter_map(
                     |(i, (partition_value, _))| {
                         let existing_partitions = existing_partitions.clone();
                         let new_manifest_list_location = new_manifest_list_location.clone();
@@ -353,12 +384,15 @@ impl Operation {
                         },
                     ],
                 ))
-            }
+            },
             Operation::Rewrite {
                 branch,
                 files,
                 lineage,
             } => {
+                let table_metadata = table.metadata();
+                let object_store = table.object_store();
+
                 let old_snapshot = table_metadata.current_snapshot(branch.as_deref())?;
                 let schema = table_metadata.current_schema(branch.as_deref())?.clone();
 
@@ -381,7 +415,8 @@ impl Operation {
                     + &uuid::Uuid::new_v4().to_string()
                     + ".avro";
 
-                let manifest_iter = datafiles.keys().enumerate().map(|(i, partition_value)| {
+                let manifest_iter = datafiles.keys().enumerate()
+                .map(|(i, partition_value)| {
                     let manifest_location = manifest_list_location
                         .to_string()
                         .trim_end_matches(".avro")
@@ -516,26 +551,268 @@ impl Operation {
                         },
                     ],
                 ))
-            }
+            },
+            Operation::Filter {
+                branch,
+                filter,
+                lineage,
+                new_files
+            } => {
+                // Delete Manifests, files based on the filter provided.
+                // use code similar to table_scan(), and NewAppend() to generate code which does the following
+                // 1. get the manifest list
+                // 2. for each manifest, get the files
+                // 3. for each file, check if it passes the filter
+                // 4. if it passes the filter, don't add it to the new manifest list
+                // 5. if it doesn't pass the filter, add it to the manifest list of the table
+                // 6. Create a snapshot for the same
+
+                let schema = table_metadata.current_schema(branch.as_deref())?;
+                let old_snapshot = table_metadata.current_snapshot(branch.as_deref())?;
+
+                let manifests = if let Some(snapshot) = old_snapshot {
+                    snapshot.manifests(table_metadata, object_store.clone()).await?
+                    .collect::<Result<Vec<_>, _>>()?
+                } else {
+                    vec![]
+                };
+
+                let all_datafiles = table
+                .datafiles(&manifests, None)
+                .await
+                .map_err(Into::<Error>::into)?;
+
+                let pruned_data_files = if let Some(physical_predicate) = filter.clone() {
+                    let arrow_schema: SchemaRef = Arc::new((schema.fields()).try_into().unwrap());
+                    let pruning_predicate =
+                    match PruningPredicate::try_new(physical_predicate, arrow_schema.clone()) {
+                        Ok(predicate) => predicate,
+                        Err(e) => {
+                            return Err(Error::IO(e.into()));
+                        }
+                    };
+
+                    let files_to_prune =
+                    match pruning_predicate.prune(&PruneDataFiles::new(&schema, &arrow_schema, &all_datafiles)) 
+                    {
+                        Ok(files) => files,
+                        Err(e) => {
+                            return Err(Error::IO(e.into()));
+                        }
+                    };
+
+                    let pruned_data_files = all_datafiles.clone().into_iter()
+                    .zip(files_to_prune.into_iter())
+                    .filter_map(|(data_file, should_prune)| {
+                        if should_prune {
+                            None
+                        } else {
+                            Some(data_file)
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                    
+                    pruned_data_files
+                } else {
+                    all_datafiles.clone()
+                };
+
+                let files: Vec<DataFile> = pruned_data_files
+                .into_iter()
+                .map(|manifest| {
+                        let partition_values = manifest
+                            .data_file();
+                        partition_values.clone()
+                })
+                .collect();
+
+                // append new_files to files
+                let mut files = files.clone();
+                files.append(&mut new_files.clone());
+                
+                // Split datafils by partition
+                let datafiles = Arc::new(files.clone().into_iter().map(Ok::<_, Error>).try_fold(
+                    HashMap::<Struct, Vec<DataFile>>::new(),
+                    |mut acc, x| {
+                        let x = x?;
+                        let partition_value = x.partition().clone();
+                        acc.entry(partition_value).or_default().push(x);
+                        Ok::<_, Error>(acc)
+                    },
+                )?);
+
+                let snapshot_id = generate_snapshot_id();
+
+                let manifest_list_location = table_metadata.location.to_string()
+                        + "/metadata/snap-"
+                        + &snapshot_id.to_string()
+                        + "-"
+                        + &uuid::Uuid::new_v4().to_string()
+                        + ".avro";
+
+                if datafiles.len() > 0 {
+                    let manifest_iter = datafiles
+                    .keys()
+                    .enumerate()
+                    .map(|(i, partition_value)| {
+                        let manifest_location = manifest_list_location.clone()
+                            .to_string()
+                            .trim_end_matches(".avro")
+                            .to_owned()
+                            + "-m"
+                            + &(i).to_string()
+                            + ".avro";
+                        let manifest = ManifestListEntry {
+                            format_version: table_metadata.format_version.clone(),
+                            manifest_path: manifest_location,
+                            manifest_length: 0,
+                            partition_spec_id: table_metadata.default_spec_id,
+                            content: Content::Data,
+                            sequence_number: table_metadata.last_sequence_number,
+                            min_sequence_number: 0,
+                            added_snapshot_id: snapshot_id,
+                            added_files_count: Some(0),
+                            existing_files_count: Some(0),
+                            deleted_files_count: Some(0),
+                            added_rows_count: Some(0),
+                            existing_rows_count: Some(0),
+                            deleted_rows_count: Some(0),
+                            partitions: None,
+                            key_metadata: None,
+                        };
+                        (ManifestStatus::New(manifest), vec![partition_value.clone()])
+                    });
+
+                    let partition_columns = Arc::new(
+                        table_metadata
+                            .default_partition_spec()?
+                            .fields()
+                            .iter()
+                            .map(|x| schema.fields().get(*x.source_id() as usize))
+                            .collect::<Option<Vec<_>>>()
+                            .ok_or(Error::InvalidFormat(
+                                "Partition column in schema".to_string(),
+                            ))?,
+                    );
+
+                    let manifest_list_schema =
+                        ManifestListEntry::schema(&table_metadata.format_version)?;
+
+                    let manifest_list_writer = Arc::new(Mutex::new(apache_avro::Writer::new(
+                        &manifest_list_schema,
+                        Vec::new(),
+                    )));
+
+                    stream::iter(manifest_iter)
+                    .then(|(manifest, files): (ManifestStatus, Vec<Struct>)| {
+                        let object_store = object_store.clone();
+                        let datafiles = datafiles.clone();
+                        let partition_columns = partition_columns.clone();
+                        let branch = branch.clone();
+                        let schema = &schema;
+                        let old_storage_table_metadata = &table_metadata;
+                        async move {
+                            write_manifest(
+                                old_storage_table_metadata,
+                                manifest,
+                                files,
+                                datafiles,
+                                schema,
+                                &partition_columns,
+                                object_store,
+                                branch,
+                            )
+                            .await
+                        }
+                    })
+                    .try_for_each_concurrent(None, |manifest| {
+                        let manifest_list_writer = manifest_list_writer.clone();
+                        async move {
+                            manifest_list_writer.lock().await.append_ser(manifest)?;
+                            Ok(())
+                        }
+                    })
+                    .await?;
+
+                    let manifest_list_bytes = Arc::into_inner(manifest_list_writer)
+                        .unwrap()
+                        .into_inner()
+                        .into_inner()?;
+
+                    object_store
+                        .put(
+                            &strip_prefix(&manifest_list_location.clone()).into(),
+                            manifest_list_bytes.into(),
+                        )
+                        .await?;
+                }
+
+                let mut snapshot_builder = SnapshotBuilder::default();
+                snapshot_builder
+                    .with_snapshot_id(snapshot_id)
+                    .with_sequence_number(
+                        old_snapshot
+                        .map(|x| *x.sequence_number() + 1)
+                        .unwrap_or_default()
+                    )
+                    .with_schema_id(*schema.schema_id())
+                    .with_manifest_list(manifest_list_location)
+                    .with_summary(Summary {
+                        operation: iceberg_rust_spec::spec::snapshot::Operation::Delete,
+                        other: if let Some(lineage) = lineage {
+                            HashMap::from_iter(vec![(
+                                DEPENDS_ON_TABLES.to_owned(),
+                                depends_on_tables_to_string(&lineage)?,
+                            )])
+                        } else {
+                            HashMap::new()
+                        },
+                    });
+
+                let snapshot = snapshot_builder
+                    .build()
+                    .map_err(iceberg_rust_spec::error::Error::from)?;
+            
+                Ok((
+                    old_snapshot.map(|x| TableRequirement::AssertRefSnapshotId {
+                        r#ref: branch.clone().unwrap_or("main".to_owned()),
+                        snapshot_id: *x.snapshot_id(),
+                    }),
+                    vec![
+                        TableUpdate::AddSnapshot { snapshot },
+                        TableUpdate::SetSnapshotRef {
+                            ref_name: branch.unwrap_or("main".to_owned()),
+                            snapshot_reference: SnapshotReference {
+                                snapshot_id,
+                                retention: SnapshotRetention::default(),
+                            },
+                        },
+                    ],
+                ))
+            },
             Operation::UpdateProperties(entries) => Ok((
                 None,
                 vec![TableUpdate::SetProperties {
                     updates: HashMap::from_iter(entries),
                 }],
             )),
-            Operation::SetSnapshotRef((key, value)) => Ok((
-                table_metadata
-                    .refs
-                    .get(&key)
-                    .map(|x| TableRequirement::AssertRefSnapshotId {
-                        r#ref: key.clone(),
-                        snapshot_id: x.snapshot_id,
-                    }),
-                vec![TableUpdate::SetSnapshotRef {
-                    ref_name: key,
-                    snapshot_reference: value,
-                }],
-            )),
+            Operation::SetSnapshotRef((key, value)) => {
+                let table_metadata = table.metadata();
+
+                Ok((
+                    table_metadata
+                        .refs
+                        .get(&key)
+                        .map(|x| TableRequirement::AssertRefSnapshotId {
+                            r#ref: key.clone(),
+                            snapshot_id: x.snapshot_id,
+                        }),
+                    vec![TableUpdate::SetSnapshotRef {
+                        ref_name: key,
+                        snapshot_reference: value,
+                    }],
+                ))
+            },
             _ => Ok((None, vec![])),
         }
     }

@@ -23,6 +23,7 @@ use crate::{
 
 pub mod table_builder;
 pub mod transaction;
+pub mod pruning_statistics;
 
 #[derive(Debug)]
 /// Iceberg table
@@ -105,9 +106,17 @@ impl Table {
                         Some(sequence_number)
                     }
                 });
-        let iter = end_snapshot
+        
+        let iter = match end_snapshot
             .manifests(metadata, self.object_store().clone())
-            .await?;
+            .await {
+                Ok(iter) => iter,
+                Err(_e) => {
+                    // return an empty vector
+                    return Ok(vec![]);
+                }
+            };
+
         match start_sequence_number {
             Some(start) => iter
                 .filter(|manifest| {
@@ -171,8 +180,9 @@ async fn datafiles(
                 filter_manifest as fn((&ManifestListEntry, bool)) -> Option<&ManifestListEntry>,
             ),
     };
+
     // Collect a vector of data files by creating a stream over the manifst files, fetch their content and return a flatten stream over their entries.
-    stream::iter(iter)
+    let datafiles: Vec<ManifestEntry> = stream::iter(iter)
         .map(|file| {
             let object_store = object_store.clone();
             async move {
@@ -181,7 +191,7 @@ async fn datafiles(
                     object_store
                         .get(&path)
                         .and_then(|file| file.bytes())
-                        .await?,
+                        .await?
                 ));
                 let reader = ManifestReader::new(bytes)?;
                 Ok(stream::iter(reader))
@@ -190,7 +200,9 @@ async fn datafiles(
         .flat_map(|reader| reader.try_flatten_stream())
         .try_collect()
         .await
-        .map_err(Error::from)
+        .map_err(Error::from)?;
+
+    Ok(datafiles)
 }
 
 /// delete all datafiles, manifests and metadata files, does not remove table from catalog

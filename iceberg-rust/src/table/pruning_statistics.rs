@@ -6,7 +6,8 @@
  * 1. Prune ManifestFiles based on information in Manifest_list_file
  * 2. Prune DataFiles based on information in Manifest_file
  *
- * For the first level the triat PruningStatistics is implemented for the DataFusionTable. It returns the pruning information for the manifest files
+ * For the first level the triat PruningStatistics is implemented for the DataFusionTable. 
+ * It returns the pruning information for the manifest files
  * and not the final data files.
  *
  * For the second level the trait PruningStatistics is implemented for the ManifestFile
@@ -29,14 +30,21 @@ use iceberg_rust_spec::spec::{
     schema::Schema,
 };
 
-pub(crate) struct PruneManifests<'table, 'manifests> {
+/// A struct that holds information needed to prune manifest files based on the manifest list file.
+///
+/// This struct contains the schema, partition specification, and a list of manifest list entries.
+/// It is used to implement the `PruningStatistics` trait for pruning manifest files.
+pub struct PruneManifests<'table, 'manifests> {
     schema: &'table Schema,
     partition_spec: &'table PartitionSpec,
     files: &'manifests [ManifestListEntry],
 }
 
 impl<'table, 'manifests> PruneManifests<'table, 'manifests> {
-    pub(crate) fn new(
+    /// Creates a new `PruneManifests` struct that holds information needed to prune manifest files based on the manifest list file.
+    ///
+    /// This constructor takes the schema, partition specification, and a list of manifest list entries, and returns a new `PruneManifests` instance.
+    pub fn new(
         schema: &'table Schema,
         partition_spec: &'table PartitionSpec,
         files: &'manifests [ManifestListEntry],
@@ -135,14 +143,32 @@ impl<'table, 'manifests> PruningStatistics for PruneManifests<'table, 'manifests
     }
 }
 
-pub(crate) struct PruneDataFiles<'table, 'manifests> {
+/// A struct that holds the schema, arrow schema, and manifest entries for pruning data files.
+///
+/// This struct is used to perform various pruning operations on the data files, such as
+/// retrieving the minimum and maximum values for a given column, checking for null values,
+/// and determining which files contain specific values.
+pub struct PruneDataFiles<'table, 'manifests> {
     schema: &'table Schema,
     arrow_schema: &'table ArrowSchema,
     files: &'manifests [ManifestEntry],
 }
 
 impl<'table, 'manifests> PruneDataFiles<'table, 'manifests> {
-    pub(crate) fn new(
+    /// Constructs a new `PruneDataFiles` struct with the given schema, arrow schema, and manifest entries.
+    ///
+    /// This struct is used to perform various pruning operations on the data files, such as
+    /// retrieving the minimum and maximum values for a given column, checking for null values,
+    /// and determining which files contain specific values.
+    ///
+    /// # Arguments
+    /// - `schema`: The schema for the table.
+    /// - `arrow_schema`: The arrow schema for the table.
+    /// - `files`: The manifest entries for the data files.
+    ///
+    /// # Returns
+    /// A new `PruneDataFiles` struct.
+    pub fn new(
         schema: &'table Schema,
         arrow_schema: &'table ArrowSchema,
         files: &'manifests [ManifestEntry],

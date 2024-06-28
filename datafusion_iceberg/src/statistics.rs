@@ -14,7 +14,8 @@ use super::table::DataFusionTable;
 
 impl DataFusionTable {
     pub(crate) async fn statistics(&self) -> Result<Statistics, Error> {
-        match self.tabular.read().await.deref() {
+        let table_read = self.tabular.read().await;
+        match table_read.deref() {
             Tabular::Table(table) => table_statistics(table, &self.snapshot_range).await,
             Tabular::View(_) => Err(Error::NotSupported("Statistics for views".to_string())),
             Tabular::MaterializedView(mv) => {
