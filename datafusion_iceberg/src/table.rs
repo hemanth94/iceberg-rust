@@ -33,6 +33,7 @@ use datafusion::{
     physical_plan::{
         insert::{DataSink, DataSinkExec},
         upsert::{OverwriteSink, UpdateSinkExec},
+        delete::DeleteSinkExec,
         metrics::MetricsSet,
         DisplayAs, DisplayFormatType, ExecutionPlan, SendableRecordBatchStream, Statistics,
     },
@@ -302,7 +303,7 @@ impl TableProvider for DataFusionTable {
         }
         // return Physical Execution Plan with a sink
         // Sink will be executed, and written into RecordBatches
-        Ok(Arc::new(UpdateSinkExec::new(
+        Ok(Arc::new(DeleteSinkExec::new(
             input,
             Arc::new(self.clone().into_data_sink()),
             self.schema.clone(),

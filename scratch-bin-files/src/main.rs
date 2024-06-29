@@ -146,7 +146,7 @@ pub(crate) async fn main() {
     ctx.sql("
     DELETE FROM orders
     WHERE \
-        customer_id=1
+        customer_id=1 OR customer_id=2
     ")
     .await
     .expect("Failed to create query plan for update")
