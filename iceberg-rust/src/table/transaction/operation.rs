@@ -142,7 +142,7 @@ impl Operation {
                                 Some(manifest.bytes().await?)
                             },
                             Err(e) => {
-                                println!("LOG :: Error Reading Manifest List {}", e);
+                                eprintln!("Error Reading Manifest List {}", e);
                                 None
                             }
                         }
@@ -157,7 +157,7 @@ impl Operation {
                         match apache_avro::Reader::new(manifest_list_bytes.as_ref()) {
                             Ok(manifest_list_reader) => manifest_list_reader,
                             Err(e) => {
-                                println!("LOG :: Error Reading Manifest List {}", e);
+                                eprintln!("Error Reading Manifest List {}", e);
                                 return Err(e.into());
                             }
                         };
@@ -570,9 +570,14 @@ impl Operation {
                 let schema = table_metadata.current_schema(branch.as_deref())?;
                 let old_snapshot = table_metadata.current_snapshot(branch.as_deref())?;
 
-                let manifests = if let Some(snapshot) = old_snapshot {
-                    snapshot.manifests(table_metadata, object_store.clone()).await?
-                    .collect::<Result<Vec<_>, _>>()?
+                let manifests: Vec<ManifestListEntry> = if let Some(snapshot) = old_snapshot {
+                    match snapshot.manifests(table_metadata, object_store.clone()).await {
+                        Ok(stream) => match stream.collect::<Result<Vec<_>, _>>() {
+                            Ok(manifests) => manifests,
+                            Err(_) => vec![],
+                        },
+                        Err(_) => vec![],
+                    }
                 } else {
                     vec![]
                 };
@@ -614,7 +619,10 @@ impl Operation {
                     
                     pruned_data_files
                 } else {
+                    // 1. Delete filter will ALWAYS have a filter
+                    // 2. If the filter is None. Then just append the new files to the manifest
                     all_datafiles.clone()
+                    // vec![]
                 };
 
                 let files: Vec<DataFile> = pruned_data_files

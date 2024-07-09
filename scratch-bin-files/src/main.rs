@@ -98,7 +98,7 @@ pub(crate) async fn main() {
         "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES 
         (1, 1, 1, '2020-01-01', 1),
         (2, 2, 1, '2020-01-01', 1),
-        (3, 3, 1, '2020-01-01', 3),
+        (3, 1, 1, '2020-01-01', 3),
         (4, 1, 2, '2020-02-02', 1),
         (5, 1, 1, '2020-02-02', 2),
         (6, 3, 3, '2020-02-02', 3);",
@@ -121,13 +121,13 @@ pub(crate) async fn main() {
     .await
     .expect("");
 
-    // // SHOW FULL TABLE
-    // ctx.sql("SELECT * from orders;")
-    // .await
-    // .expect("Failed to create SELECT Query Plan")
-    // .show()
-    // .await
-    // .expect("Failed to execute SELECT execution plan");
+    println!("SHOW FULL TABLE");
+    ctx.sql("SELECT * from orders;")
+    .await
+    .expect("Failed to create SELECT Query Plan")
+    .show()
+    .await
+    .expect("Failed to execute SELECT execution plan");
 
     // FILTER QUERY SAMPLE
     // ctx.sql("
@@ -143,18 +143,19 @@ pub(crate) async fn main() {
 
 
     // DELETE Query Sample
+    println!("DELETE QUERY");
     ctx.sql("
     DELETE FROM orders
     WHERE \
-        customer_id=1 OR customer_id=2
+        customer_id=1;
     ")
     .await
     .expect("Failed to create query plan for update")
-    .collect()
+    .show()
     .await
     .expect("Failed to execute Query Execution Plan");
 
-
+    
     ctx.sql(
         "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES 
         (10, 3, 2, '2020-03-03', 1),
@@ -167,23 +168,33 @@ pub(crate) async fn main() {
     .await
     .expect("");
 
+
+    println!("SHOW FULL TABLE");
+    ctx.sql("SELECT * from orders;")
+    .await
+    .expect("Failed to create SELECT Query Plan")
+    .show()
+    .await
+    .expect("Failed to execute SELECT execution plan");
+
+    // eprintln!("Updating Table");
+    // UPDATE Query Sample
+    println!("UPDATE QUERY");
+    ctx.sql("
+    UPDATE orders \
+    SET product_id=10 where customer_id=2;
+    ")
+    .await
+    .expect("Failed to create query plan for update")
+    .show().await.expect("Failed to execute Query Execution Plan");
+
+
+    // PRINT FINAL OUTPUT
+    println!("SHOW FULL TABLE");
     ctx.sql("SELECT * from orders;")
     .await
     .expect("Failed to create SELECT Query Plan")
     .show()
     .await
     .expect("Failed to execute SELECT Query Execution Plan");
-
-    // FILTER Query Sample
-    ctx.sql("
-    SELECT * FROM orders
-    WHERE \
-        customer_id=2
-    ")
-    .await
-    .expect("Failed to create query plan for update")
-    .show()
-    .await
-    .expect("Failed to execute Query Execution Plan");
-
 }

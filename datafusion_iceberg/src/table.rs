@@ -12,7 +12,7 @@ use std::{
     collections::{HashMap, HashSet},
     fmt,
     ops::{Deref, DerefMut},
-    sync::Arc,
+    sync::Arc, vec,
 };
 use tokio::sync::{RwLock, RwLockWriteGuard};
 
@@ -263,14 +263,14 @@ impl TableProvider for DataFusionTable {
     async fn update_table(
         &self,
         _state: &SessionState,
-        input: Arc<dyn ExecutionPlan>,
+        input_plan: Arc<dyn ExecutionPlan>,
         overwrite: bool,
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
         // Create Physical Execution Plan for UPDATE node 
         // on top of Physical Execution Plan of child nodes
 
         // Check that the schema of the plan matches the schema of this table.
-        if !self.schema().equivalent_names_and_types(&input.schema()) {
+        if !self.schema().equivalent_names_and_types(&input_plan.schema()) {
             return plan_err!("Updating query must have the same schema with the table.");
         }
         if overwrite {
@@ -278,7 +278,7 @@ impl TableProvider for DataFusionTable {
         }
         // return Physical Execution Plan
         Ok(Arc::new(UpdateSinkExec::new(
-            input,
+            input_plan,
             Arc::new(self.clone().into_data_sink()),
             self.schema.clone(),
             None,
@@ -395,11 +395,18 @@ async fn table_scan(
                 })
                 .cloned(),
         );
-
-        let manifests = table
+        let manifests = match table
             .manifests(snapshot_range.0, snapshot_range.1)
             .await
-            .map_err(Into::<Error>::into)?;
+            {
+                Ok(manifests) => manifests,
+                Err(e) => {
+                    return Err(DataFusionError::Execution(format!(
+                        "Error reading manifest list: {}",
+                        e
+                    )))
+                }
+            };
 
         // If there is a filter expression on the partition column, the manifest files to read are pruned.
         let data_files = if let Some(predicate) = partition_predicates {
@@ -478,10 +485,17 @@ async fn table_scan(
                 };
             });
     } else {
-        let manifests = table
+        let manifests = match table
             .manifests(snapshot_range.0, snapshot_range.1)
-            .await
-            .map_err(Into::<Error>::into)?;
+            .await {
+                Ok(manifests) => manifests,
+                Err(e) => {
+                    return Err(DataFusionError::Execution(format!(
+                        "Error reading manifest list: {}",
+                        e
+                    )))
+                },
+            };
         let data_files = table
             .datafiles(&manifests, None)
             .await
@@ -677,7 +691,7 @@ impl OverwriteSink for IcebergDataSink {
 
     async fn overwrite_with(
         &self,
-        data: SendableRecordBatchStream,
+        input_data: SendableRecordBatchStream,
         _context: &Arc<TaskContext>,
         filter: Option<Arc<dyn PhysicalExpr>>,
     ) -> Result<u64, DataFusionError> {
@@ -693,8 +707,8 @@ impl OverwriteSink for IcebergDataSink {
 
         let new_files = write_parquet_partitioned(
             table.metadata(),
-            data.map_err(Into::into),
-            object_store,
+            input_data.map_err(Into::into),
+            object_store.clone(),
             self.0.branch.as_deref(),
         )
         .await?;
