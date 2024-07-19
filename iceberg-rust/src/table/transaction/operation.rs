@@ -142,7 +142,11 @@ impl Operation {
                                 Some(manifest.bytes().await?)
                             },
                             Err(e) => {
-                                eprintln!("Error Reading Manifest List {}", e);
+                                if !e.to_string().contains("No data in memory found") {
+                                    panic!("Error Reading Manifest List {e}");
+                                }
+                                // TODO :: Find a graceful solution to the empty manifest list problem
+                                eprintln!("Proceeding with Empty Manifest List");
                                 None
                             }
                         }
@@ -574,9 +578,19 @@ impl Operation {
                     match snapshot.manifests(table_metadata, object_store.clone()).await {
                         Ok(stream) => match stream.collect::<Result<Vec<_>, _>>() {
                             Ok(manifests) => manifests,
-                            Err(_) => vec![],
+                            Err(e) => {
+                                eprintln!("Error Reading Manifest List during Operation::Filter {e}");
+                                vec![]
+                            },
                         },
-                        Err(_) => vec![],
+                        Err(e) => {
+                                if !e.to_string().contains("No data in memory found") {
+                                    panic!("Error Reading Manifest List {e}");
+                                }
+                                // TODO :: Find a graceful solution to the empty manifest list problem
+                                eprintln!("Proceeding with Empty Manifest List");
+                                vec![]
+                        }
                     }
                 } else {
                     vec![]

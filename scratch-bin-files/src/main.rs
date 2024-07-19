@@ -147,13 +147,35 @@ pub(crate) async fn main() {
     ctx.sql("
     DELETE FROM orders
     WHERE \
-        customer_id=1;
+        customer_id=1 OR customer_id=2 OR customer_id=3;
     ")
     .await
     .expect("Failed to create query plan for update")
     .show()
     .await
     .expect("Failed to execute Query Execution Plan");
+
+    // DELETE Query Sample
+    println!("DELETE QUERY");
+    ctx.sql("
+    DELETE FROM orders
+    WHERE \
+        customer_id=4;
+    ")
+    .await
+    .expect("Failed to create query plan for update")
+    .show()
+    .await
+    .expect("Failed to execute Query Execution Plan");
+
+    println!("UPDATE QUERY");
+    ctx.sql("
+    UPDATE orders \
+    SET product_id=10;
+    ")
+    .await
+    .expect("Failed to create query plan for update")
+    .show().await.expect("Failed to execute Query Execution Plan");
 
     
     ctx.sql(
