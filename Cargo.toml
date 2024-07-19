@@ -19,7 +19,7 @@ futures = "0.3.30"
 async-trait = "0.1"
 chrono = { version = "0.4", default-features = false, features = ["serde"] }
 arrow = "51.0.0"
-arrow-schema = "51.0.0"
+arrow-schema = { version = "51.0.0", features = ["serde"]}
 datafusion = "38.0.0"
 datafusion-sql = "38.0.0"
 datafusion-expr = "38.0.0"

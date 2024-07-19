@@ -14,6 +14,7 @@ use iceberg_rust_spec::spec::{
     table_metadata::TableMetadata,
 };
 use iceberg_rust_spec::util::{self};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     catalog::{bucket::Bucket, create::CreateTableBuilder, identifier::Identifier, Catalog},
@@ -23,7 +24,7 @@ use crate::{
 
 pub mod transaction;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 /// Iceberg table
 pub struct Table {
     identifier: Identifier,
@@ -57,7 +58,7 @@ impl Table {
     }
     #[inline]
     /// Get the catalog associated to the table. Returns None if the table is a filesystem table
-    pub fn catalog(&self) -> Arc<dyn Catalog> {
+    pub fn catalog<T: Catalog>(&self) -> Arc<T> {
         self.catalog.clone()
     }
     #[inline]

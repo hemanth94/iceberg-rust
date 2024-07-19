@@ -7,6 +7,7 @@ use chrono::DateTime;
 use datafusion_expr::utils::conjunction;
 use futures::TryStreamExt;
 use object_store::ObjectMeta;
+use serde::{Deserialize, Serialize};
 use std::{
     any::Any,
     collections::{HashMap, HashSet},
@@ -58,7 +59,7 @@ use iceberg_rust::{
 };
 // mod value;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 /// Iceberg table for datafusion
 pub struct DataFusionTable {
     pub tabular: Arc<RwLock<Tabular>>,

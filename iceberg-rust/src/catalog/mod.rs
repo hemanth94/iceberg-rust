@@ -12,6 +12,8 @@ pub mod namespace;
 use iceberg_rust_spec::view_metadata::FullIdentifier;
 use identifier::Identifier;
 use object_store::ObjectStore;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 use crate::error::Error;
 use crate::materialized_view::MaterializedView;
@@ -30,8 +32,7 @@ pub mod create;
 pub mod tabular;
 
 /// Trait to create, replace and drop tables in an iceberg catalog.
-#[async_trait::async_trait]
-pub trait Catalog: Send + Sync + Debug {
+pub trait Catalog: Send + Sync + Debug + Serialize + DeserializeOwned {
     /// Name of the catalog
     fn name(&self) -> &str;
     /// Create a namespace in the catalog
@@ -106,7 +107,6 @@ pub trait Catalog: Send + Sync + Debug {
 }
 
 /// Trait to obtain a catalog by name
-#[async_trait::async_trait]
 pub trait CatalogList: Send + Sync + Debug {
     /// Get catalog from list by name
     async fn catalog(&self, name: &str) -> Option<Arc<dyn Catalog>>;

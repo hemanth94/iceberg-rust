@@ -66,10 +66,10 @@ pub struct CreateTable {
 
 impl CreateTableBuilder {
     /// Build the table, registering it in a catalog
-    pub async fn build(
+    pub async fn build<T: Catalog>(
         &mut self,
         namespace: &[String],
-        catalog: Arc<dyn Catalog>,
+        catalog: Arc<T>,
     ) -> Result<Table, Error> {
         let name = self
             .name
@@ -159,10 +159,10 @@ pub struct CreateView<T: Materialization> {
 
 impl CreateViewBuilder<Option<()>> {
     /// Build the table, registering it in a catalog
-    pub async fn build(
+    pub async fn build<T: Catalog>(
         &mut self,
         namespace: &[String],
-        catalog: Arc<dyn Catalog>,
+        catalog: Arc<T>,
     ) -> Result<View, Error> {
         let name = self
             .name
@@ -252,10 +252,10 @@ pub struct CreateMaterializedView {
 
 impl CreateMaterializedViewBuilder {
     /// Build the table, registering it in a catalog
-    pub async fn build(
+    pub async fn build<T: Catalog>(
         &mut self,
         namespace: &[String],
-        catalog: Arc<dyn Catalog>,
+        catalog: Arc<T>,
     ) -> Result<MaterializedView, Error> {
         let name = self
             .name

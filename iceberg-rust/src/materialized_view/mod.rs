@@ -8,6 +8,7 @@ use iceberg_rust_spec::spec::{
     materialized_view_metadata::MaterializedViewMetadata, schema::Schema,
 };
 use object_store::ObjectStore;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     catalog::{
@@ -27,7 +28,7 @@ pub static STORAGE_TABLE_POSTFIX: &str = "__storage";
 /// Flag to mark a table as a storage table
 pub static STORAGE_TABLE_FLAG: &str = "materialize.storage_table";
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 /// An iceberg materialized view
 pub struct MaterializedView {
     /// Type of the View, either filesystem or metastore.

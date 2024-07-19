@@ -24,6 +24,7 @@ dashmap = "5.4.0"
 uuid = { workspace = true }
 thiserror = { workspace = true }
 tokio = { version = "1.0", features = ["sync","rt-multi-thread"] }
+serde = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]
 tokio = "1"
