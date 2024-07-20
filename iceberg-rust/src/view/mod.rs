@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 use iceberg_rust_spec::spec::{schema::Schema, view_metadata::ViewMetadata};
 use object_store::ObjectStore;
-use serde::{Deserialize, Serialize};
 
 use crate::{
     catalog::{bucket::Bucket, create::CreateViewBuilder, identifier::Identifier, Catalog},
@@ -17,7 +16,7 @@ use self::transaction::Transaction as ViewTransaction;
 
 pub mod transaction;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 /// An iceberg view
 pub struct View {
     /// Type of the View, either filesystem or metastore.

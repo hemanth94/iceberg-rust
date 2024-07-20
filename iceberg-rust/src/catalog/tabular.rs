@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 use iceberg_rust_spec::spec::tabular::TabularMetadata;
 use object_store::ObjectStore;
-use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
 use crate::materialized_view::MaterializedView;
@@ -16,7 +15,7 @@ use crate::view::View;
 use super::identifier::Identifier;
 use super::Catalog;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 /// Enum for different types that can be queried like a table, for example view
 pub enum Tabular {
@@ -53,7 +52,7 @@ impl Tabular {
 
     #[inline]
     /// Return catalog for relation.
-    pub fn catalog<T: Catalog>(&self) -> Arc<T> {
+    pub fn catalog(&self) -> Arc<dyn Catalog> {
         match self {
             Tabular::Table(table) => table.catalog(),
             Tabular::View(view) => view.catalog(),
