@@ -13,8 +13,8 @@ use datafusion::arrow::datatypes::SchemaRef;
 use datafusion::physical_optimizer::pruning::PruningPredicate;
 use futures::{lock::Mutex, stream, StreamExt, TryStreamExt};
 use iceberg_rust_spec::spec::{
-    manifest::{partition_value_schema, Content, DataFile, ManifestEntry, ManifestWriter, Status},
-    manifest_list::{FieldSummary, ManifestListEntry, ManifestListEntryEnum},
+    manifest::{partition_value_schema, DataFile, ManifestEntry, ManifestWriter, Status},
+    manifest_list::{Content, FieldSummary, ManifestListEntry, ManifestListEntryEnum},
     materialized_view_metadata::{depends_on_tables_to_string, SourceTable},
     partition::PartitionField,
     schema::Schema,
@@ -584,12 +584,12 @@ impl Operation {
                             },
                         },
                         Err(e) => {
-                                if !e.to_string().contains("No data in memory found") {
-                                    panic!("Error Reading Manifest List {e}");
-                                }
-                                // TODO :: Find a graceful solution to the empty manifest list problem
-                                eprintln!("Proceeding with Empty Manifest List");
-                                vec![]
+                            if !e.to_string().contains("No data in memory found") {
+                                panic!("Error Reading Manifest List {e}");
+                            }
+                            // TODO :: Find a graceful solution to the empty manifest list problem
+                            eprintln!("Proceeding with Empty Manifest List");
+                            vec![]
                         }
                     }
                 } else {
@@ -623,7 +623,7 @@ impl Operation {
                     let pruned_data_files = all_datafiles.clone().into_iter()
                     .zip(files_to_prune.into_iter())
                     .filter_map(|(data_file, should_prune)| {
-                        if should_prune {
+                        if should_prune || *data_file.status() == Status::Deleted {
                             None
                         } else {
                             Some(data_file)
@@ -633,10 +633,14 @@ impl Operation {
                     
                     pruned_data_files
                 } else {
-                    // 1. Delete filter will ALWAYS have a filter
-                    // 2. If the filter is None. Then just append the new files to the manifest
-                    all_datafiles.clone()
-                    // vec![]
+                    all_datafiles.clone().into_iter().filter_map(|data_file| {
+                        if *data_file.status() == Status::Deleted {
+                            None
+                        } else {
+                            Some(data_file)
+                        }
+                    })
+                    .collect::<Vec<_>>()
                 };
 
                 let files: Vec<DataFile> = pruned_data_files
