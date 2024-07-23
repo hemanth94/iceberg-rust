@@ -504,6 +504,7 @@ async fn table_scan(
             .await
             .map_err(Into::<Error>::into)?;
         data_files.into_iter().for_each(|manifest| {
+            eprintln!("Manifest Status: {:?}", manifest.status());
             if *manifest.status() != Status::Deleted {
                 let partition_values = manifest
                     .data_file()
