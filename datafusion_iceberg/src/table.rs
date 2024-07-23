@@ -487,6 +487,7 @@ async fn table_scan(
                 };
             });
     } else {
+        println!("In the scan without predicate");
         let manifests = match table
             .manifests(snapshot_range.0, snapshot_range.1)
             .await {
