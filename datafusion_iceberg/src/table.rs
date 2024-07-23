@@ -445,6 +445,7 @@ async fn table_scan(
         let files_to_prune =
             pruning_predicate.prune(&PruneDataFiles::new(&schema, &arrow_schema, &data_files))?;
 
+        println!("Reaching");
         data_files
             .into_iter()
             .zip(files_to_prune.into_iter())
