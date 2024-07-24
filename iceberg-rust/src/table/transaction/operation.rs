@@ -12,6 +12,7 @@ use datafusion::physical_plan::PhysicalExpr;
 use datafusion::arrow::datatypes::SchemaRef;
 use datafusion::physical_optimizer::pruning::PruningPredicate;
 use futures::{lock::Mutex, stream, StreamExt, TryStreamExt};
+use datafusion_expr::FilterOp;
 use iceberg_rust_spec::spec::{
     manifest::{partition_value_schema, Content, DataFile, ManifestEntry, ManifestWriter, Status},
     manifest_list::{FieldSummary, ManifestListEntry, ManifestListEntryEnum},
@@ -80,6 +81,7 @@ pub enum Operation {
         filter: Option<Arc<dyn PhysicalExpr>>,
         lineage: Option<Vec<SourceTable>>,
         new_files: Vec<DataFile>,
+        op: FilterOp
     },
     // /// Remove or replace rows in existing data files
     // NewRowDelta,
@@ -560,7 +562,8 @@ impl Operation {
                 branch,
                 filter,
                 lineage,
-                new_files
+                new_files,
+                op
             } => {
                 // Delete Manifests, files based on the filter provided.
                 // use code similar to table_scan(), and NewAppend() to generate code which does the following
@@ -631,15 +634,18 @@ impl Operation {
                     })
                     .collect::<Vec<_>>();
                     
-                    pruned_data_files
+                    Some(pruned_data_files)
                 } else {
                     // 1. Delete filter will ALWAYS have a filter
                     // 2. If the filter is None. Then just append the new files to the manifest
-                    all_datafiles.clone()
-                    // vec![]
+                    match op {
+                        FilterOp::Delete => Some(all_datafiles.clone()),
+                        FilterOp::Update => Some(vec![]),
+                        FilterOp::Filter => None
+                    }
                 };
 
-                let files: Vec<DataFile> = pruned_data_files
+                let files: Vec<DataFile> = pruned_data_files.unwrap()
                 .into_iter()
                 .map(|manifest| {
                         let partition_values = manifest

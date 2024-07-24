@@ -143,30 +143,39 @@ pub(crate) async fn main() {
 
 
     // DELETE Query Sample
-    println!("DELETE QUERY");
-    ctx.sql("
-    DELETE FROM orders
-    WHERE \
-        customer_id=1 OR customer_id=2 OR customer_id=3;
-    ")
-    .await
-    .expect("Failed to create query plan for update")
-    .show()
-    .await
-    .expect("Failed to execute Query Execution Plan");
+    // println!("DELETE QUERY");
+    // ctx.sql("
+    // DELETE FROM orders
+    // WHERE \
+    //     customer_id=1 OR customer_id=2 OR customer_id=3;
+    // ")
+    // .await
+    // .expect("Failed to create query plan for update")
+    // .show()
+    // .await
+    // .expect("Failed to execute Query Execution Plan");
 
-    // DELETE Query Sample
-    println!("DELETE QUERY");
-    ctx.sql("
-    DELETE FROM orders
-    WHERE \
-        customer_id=4;
-    ")
-    .await
-    .expect("Failed to create query plan for update")
-    .show()
-    .await
-    .expect("Failed to execute Query Execution Plan");
+    // // DELETE Query Sample
+    // println!("DELETE QUERY");
+    // ctx.sql("
+    // DELETE FROM orders
+    // WHERE \
+    //     customer_id=4;
+    // ")
+    // .await
+    // .expect("Failed to create query plan for update")
+    // .show()
+    // .await
+    // .expect("Failed to execute Query Execution Plan");
+
+    
+    // println!("SHOW FULL TABLE");
+    // ctx.sql("SELECT * from orders;")
+    // .await
+    // .expect("Failed to create SELECT Query Plan")
+    // .show()
+    // .await
+    // .expect("Failed to execute SELECT execution plan");
 
     println!("UPDATE QUERY");
     ctx.sql("
@@ -201,22 +210,22 @@ pub(crate) async fn main() {
 
     // eprintln!("Updating Table");
     // UPDATE Query Sample
-    println!("UPDATE QUERY");
-    ctx.sql("
-    UPDATE orders \
-    SET product_id=10 where customer_id=2;
-    ")
-    .await
-    .expect("Failed to create query plan for update")
-    .show().await.expect("Failed to execute Query Execution Plan");
+    // println!("UPDATE QUERY");
+    // ctx.sql("
+    // UPDATE orders \
+    // SET product_id=10 where customer_id=2;
+    // ")
+    // .await
+    // .expect("Failed to create query plan for update")
+    // .show().await.expect("Failed to execute Query Execution Plan");
 
 
-    // PRINT FINAL OUTPUT
-    println!("SHOW FULL TABLE");
-    ctx.sql("SELECT * from orders;")
-    .await
-    .expect("Failed to create SELECT Query Plan")
-    .show()
-    .await
-    .expect("Failed to execute SELECT Query Execution Plan");
+    // // PRINT FINAL OUTPUT
+    // println!("SHOW FULL TABLE");
+    // ctx.sql("SELECT * from orders;")
+    // .await
+    // .expect("Failed to create SELECT Query Plan")
+    // .show()
+    // .await
+    // .expect("Failed to execute SELECT Query Execution Plan");
 }

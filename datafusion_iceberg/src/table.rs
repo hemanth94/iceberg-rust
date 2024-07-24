@@ -15,7 +15,7 @@ use std::{
     sync::Arc, vec,
 };
 use tokio::sync::{RwLock, RwLockWriteGuard};
-
+use datafusion_expr::FilterOp;
 use datafusion::{
     arrow::datatypes::{Field, SchemaRef},
     common::{not_impl_err, plan_err, DataFusionError, SchemaExt},
@@ -694,6 +694,7 @@ impl OverwriteSink for IcebergDataSink {
         input_data: SendableRecordBatchStream,
         _context: &Arc<TaskContext>,
         filter: Option<Arc<dyn PhysicalExpr>>,
+        op: FilterOp
     ) -> Result<u64, DataFusionError> {
         let mut lock = self.0.tabular.write().await;
         let table = if let Tabular::Table(table) = lock.deref_mut() {
@@ -716,7 +717,7 @@ impl OverwriteSink for IcebergDataSink {
         // STEP 1 : Delete the files where rows need to be changed
         // STEP 2 : Append the new files
         table.new_transaction(self.0.branch.as_deref())
-        .overwrite(filter, new_files)
+        .overwrite(filter, new_files, op)
         .commit().await.map_err(Into::<Error>::into)?;
 
         Ok(0)

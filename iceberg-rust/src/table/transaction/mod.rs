@@ -10,6 +10,7 @@ use iceberg_rust_spec::spec::{
 };
 
 use datafusion::physical_expr::PhysicalExpr;
+use datafusion_expr::FilterOp;
 
 use crate::{catalog::commit::CommitTable, error::Error, table::Table};
 
@@ -79,14 +80,15 @@ impl<'table> TableTransaction<'table> {
         self
     }
     /// Quickly Update table for UPDATE/DELETE operations
-    pub fn overwrite(mut self, filter: Option<Arc<dyn PhysicalExpr>>, new_files: Vec<DataFile> ) -> Self {
+    pub fn overwrite(mut self, filter: Option<Arc<dyn PhysicalExpr>>, new_files: Vec<DataFile>, op: FilterOp ) -> Self {
         self.operations.insert(
             OVERWRITE_KEY.to_owned(),
             Operation::Filter {
                 branch: self.branch.clone(),
                 filter,
                 lineage: None,
-                new_files
+                new_files,
+                op
             }
         );
         self
