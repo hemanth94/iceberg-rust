@@ -10,17 +10,13 @@ use iceberg_rust::{
     table::table_builder::TableBuilder,
 };
 use iceberg_sql_catalog::SqlCatalog;
-use object_store::memory::InMemory;
-use object_store::ObjectStore;
 
 use std::sync::Arc;
 
 #[tokio::main]
 pub(crate) async fn main() {
-    let object_store: Arc<dyn ObjectStore> = Arc::new(InMemory::new());
-
     let catalog: Arc<dyn Catalog> = Arc::new(
-        SqlCatalog::new("sqlite://", "test", object_store.clone())
+        SqlCatalog::new("sqlite://", "test", "InMemory", None)
             .await
             .unwrap(),
     );

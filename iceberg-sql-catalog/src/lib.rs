@@ -15,6 +15,9 @@ use iceberg_rust::{
         tabular::Tabular,
         Catalog, CatalogList,
     },
+    io::{
+        object_store::get_object_store
+    },
     error::Error as IcebergError,
     materialized_view::MaterializedView,
     spec::{
@@ -42,6 +45,7 @@ pub struct SqlCatalog {
     connection: Arc<Mutex<AnyConnection>>,
     object_store: Arc<dyn ObjectStore>,
     cache: Arc<DashMap<Identifier, (String, TabularMetadata)>>,
+    url: String,
 }
 
 pub mod error;
@@ -51,11 +55,11 @@ impl SqlCatalog {
         url: &str,
         name: &str,
         location: &str,
-        region: &str,
+        region: Option<&str>,
     ) -> Result<Self, Error> {
         install_default_drivers();
 
-        let object_store: Arc<dyn ObjectStore> = get_object_store(&location,&region);
+        let object_store: Arc<dyn ObjectStore> = get_object_store(&location,region);
 
         let mut connection =
             AnyConnectOptions::connect(&AnyConnectOptions::from_url(&url.try_into()?)?).await?;
@@ -102,6 +106,7 @@ impl SqlCatalog {
             connection: Arc::new(Mutex::new(connection)),
             object_store,
             cache: Arc::new(DashMap::new()),
+            url: url.to_owned(),
         })
     }
 
@@ -109,12 +114,12 @@ impl SqlCatalog {
         Arc::new(SqlCatalogList {
             connection: self.connection.clone(),
             object_store: self.object_store.clone(),
+            url: self.url.to_owned()
         })
     }
 
-    pub fn database_url(&self) -> String {
-        let conn = self.connection.lock().unwrap();
-        conn.url().to_string()
+    pub async fn  database_url(&self) -> String {
+        self.url.clone()
     }
 }
 
@@ -692,6 +697,7 @@ impl SqlCatalog {
             connection: self.connection.clone(),
             object_store: self.object_store.clone(),
             cache: Arc::new(DashMap::new()),
+            url: self.url.to_owned()
         }
     }
 }
@@ -700,6 +706,7 @@ impl SqlCatalog {
 pub struct SqlCatalogList {
     connection: Arc<Mutex<AnyConnection>>,
     object_store: Arc<dyn ObjectStore>,
+    url: String
 }
 
 impl SqlCatalogList {
@@ -730,7 +737,8 @@ impl SqlCatalogList {
 
         Ok(SqlCatalogList {
             connection: Arc::new(Mutex::new(connection)),
-            object_store,
+            object_store: object_store,
+            url: url.to_owned(),
         })
     }
 }
@@ -743,6 +751,8 @@ impl CatalogList for SqlCatalogList {
             connection: self.connection.clone(),
             object_store: self.object_store.clone(),
             cache: Arc::new(DashMap::new()),
+            url: self.url.to_owned()
+
         }))
     }
     async fn list_catalogs(&self) -> Vec<String> {
@@ -776,16 +786,15 @@ pub mod tests {
         },
         table::table_builder::TableBuilder,
     };
-    use object_store::{memory::InMemory, ObjectStore};
+
     use std::sync::Arc;
 
     use crate::SqlCatalog;
 
     #[tokio::test]
     async fn test_create_update_drop_table() {
-        let object_store: Arc<dyn ObjectStore> = Arc::new(InMemory::new());
         let catalog: Arc<dyn Catalog> = Arc::new(
-            SqlCatalog::new("sqlite://", "test", object_store)
+            SqlCatalog::new("sqlite://", "test", "InMemory", None)
                 .await
                 .unwrap(),
         );

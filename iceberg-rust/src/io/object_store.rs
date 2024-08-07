@@ -1,48 +1,47 @@
 use std::sync::Arc;
 use url::Url;
-use datafusion::error::DataFusionError;
 use object_store::ObjectStore;
 use object_store::aws::AmazonS3Builder;
-use aws_sdk_s3::Client;
 use object_store::local::LocalFileSystem;
+use object_store::memory::InMemory;
 
 pub fn get_object_store(
     url: &str,
     region: Option<&str>,
-) -> Result<Arc<dyn ObjectStore>, DataFusionError> {
+) -> Arc<dyn ObjectStore> {
     let region = region.unwrap_or("us-east-1");
 
     if url.starts_with("s3://") {
-        let mut url = Url::parse(url).unwrap();
+        let url = Url::parse(url).expect("Failed to parse S3 URL");
         if let Some(bucket_name) = url.host_str() {
-            let store = Arc::new(
+            return Arc::new(
                 AmazonS3Builder::from_env()
                     .with_bucket_name(bucket_name)
                     .with_region(region)
-                    .build()?,
+                    .build()
+                    .expect("Failed to build Amazon S3 object store"),
             );
-            return Ok(store);
         }
     } else if url.starts_with("oss://") {
-        let mut url = Url::parse(url).unwrap();
+        let url = Url::parse(url).expect("Failed to parse OSS URL");
         if let Some(bucket_name) = url.host_str() {
-            let store = Arc::new(
+            return Arc::new(
                 AmazonS3Builder::from_env()
                     .with_virtual_hosted_style_request(true)
                     .with_bucket_name(bucket_name)
-                    .build()?,
+                    .build()
+                    .expect("Failed to build OSS object store"),
             );
-            return Ok(store);
         }
+    } else if  url.starts_with("InMemory") {
+        return Arc::new(InMemory::new());
+
     } else {
-        let store: Arc<dyn ObjectStore> =
-            Arc::new(LocalFileSystem::new_with_prefix(url).unwrap());
-
-        return Ok(store);
-
+        return Arc::new(
+            LocalFileSystem::new_with_prefix(url)
+                .expect("Failed to create local file system object store"),
+        );
     }
 
-    Err(DataFusionError::Execution(format!(
-        "No object store available for: {url}"
-    )))
+    panic!("No object store available for: {}", url);
 }
