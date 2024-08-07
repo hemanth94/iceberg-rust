@@ -17,11 +17,16 @@ pub(crate) async fn main() {
     let object_store: Arc<dyn ObjectStore> =
         Arc::new(LocalFileSystem::new_with_prefix("iceberg-tests/nyc_taxis").unwrap());
 
+
     let catalog: Arc<dyn Catalog> = Arc::new(
-        SqlCatalog::new("sqlite://", "test", object_store.clone())
+        SqlCatalog::new("sqlite://", "test", "iceberg-tests/nyc_taxis", None )
             .await
             .unwrap(),
     );
+
+    let db_url = catalog.database_url();
+    println!("Database URL: {}", db_url);
+
     let identifier = Identifier::parse("test.table1").unwrap();
 
     let metadata: TableMetadata= serde_json::from_slice(&object_store.get(&"/home/iceberg/warehouse/nyc/taxis/metadata/fb072c92-a02b-11e9-ae9c-1bb7bc9eca94.metadata.json".into()).await.unwrap().bytes().await.unwrap()).unwrap();

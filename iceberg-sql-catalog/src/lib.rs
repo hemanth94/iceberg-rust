@@ -152,6 +152,10 @@ fn query_map(row: &AnyRow) -> Result<TableRef, sqlx::Error> {
 
 #[async_trait]
 impl Catalog for SqlCatalog {
+
+    fn database_url(&self) -> String {
+        self.url.clone()
+    }
     /// Create a namespace in the catalog
     async fn create_namespace(
         &self,

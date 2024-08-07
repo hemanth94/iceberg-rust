@@ -95,6 +95,8 @@ pub trait Catalog: Send + Sync + Debug {
     ) -> Result<MaterializedView, Error>;
     /// Return the associated object store for a bucket
     fn object_store(&self, bucket: Bucket) -> Arc<dyn ObjectStore>;
+    /// Create a namespace in the catalog
+    fn database_url(&self) -> String;
 }
 
 /// Trait to obtain a catalog by name

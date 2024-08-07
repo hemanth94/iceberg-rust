@@ -58,6 +58,7 @@ impl RestCatalog {
 
 #[async_trait]
 impl Catalog for RestCatalog {
+    fn database_url(&self) -> std::string::String { todo!() }
     /// Create a namespace in the catalog
     async fn create_namespace(
         &self,
