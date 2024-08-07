@@ -10,5 +10,7 @@ pub mod materialized_view;
 pub mod sql;
 pub mod table;
 pub mod view;
+mod io;
 
 pub use iceberg_rust_spec::*;
+
