@@ -50,9 +50,12 @@ impl SqlCatalog {
     pub async fn new(
         url: &str,
         name: &str,
-        object_store: Arc<dyn ObjectStore>,
+        location: &str,
+        region: &str,
     ) -> Result<Self, Error> {
         install_default_drivers();
+
+        let object_store: Arc<dyn ObjectStore> = get_object_store(&location,&region);
 
         let mut connection =
             AnyConnectOptions::connect(&AnyConnectOptions::from_url(&url.try_into()?)?).await?;
@@ -107,6 +110,11 @@ impl SqlCatalog {
             connection: self.connection.clone(),
             object_store: self.object_store.clone(),
         })
+    }
+
+    pub fn database_url(&self) -> String {
+        let conn = self.connection.lock().unwrap();
+        conn.url().to_string()
     }
 }
 
