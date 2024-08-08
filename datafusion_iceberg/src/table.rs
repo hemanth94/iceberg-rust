@@ -267,7 +267,7 @@ impl TableProvider for DataFusionTable {
         input_plan: Arc<dyn ExecutionPlan>,
         overwrite: bool,
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
-        // Create Physical Execution Plan for UPDATE node 
+        // Create Physical Execution Plan for UPDATE node
         // on top of Physical Execution Plan of child nodes
 
         // Check that the schema of the plan matches the schema of this table.
@@ -292,7 +292,7 @@ impl TableProvider for DataFusionTable {
         input: Arc<dyn ExecutionPlan>,
         overwrite: bool,
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
-        // Create Physical Execution Plan for UPDATE node 
+        // Create Physical Execution Plan for UPDATE node
         // on top of Physical Execution Plan of child nodes
 
         // Check that the schema of the plan matches the schema of this table.
@@ -316,13 +316,13 @@ impl TableProvider for DataFusionTable {
 #[allow(clippy::too_many_arguments)]
 /// Scans an Iceberg table and returns an `ExecutionPlan` that can be used to execute the scan.
 ///
-/// This function takes in various parameters to configure the scan, including 
-/// the table, snapshot range, schema, statistics, session state, projection, filters, and limit. 
-/// It then constructs a `FileScanConfig` based on these parameters and uses the 
+/// This function takes in various parameters to configure the scan, including
+/// the table, snapshot range, schema, statistics, session state, projection, filters, and limit.
+/// It then constructs a `FileScanConfig` based on these parameters and uses the
 /// `ParquetFormat` to create the physical execution plan.
 ///
-/// The function first checks if there are any filters on the partition columns and prunes the manifest files accordingly. 
-/// It then prunes the data files based on the pruning statistics in the manifest files. 
+/// The function first checks if there are any filters on the partition columns and prunes the manifest files accordingly.
+/// It then prunes the data files based on the pruning statistics in the manifest files.
 /// Finally, it constructs the `FileScanConfig` and returns the physical execution plan.
 async fn table_scan(
     table: &Table,
@@ -338,7 +338,7 @@ async fn table_scan(
         .1
         .and_then(|snapshot_id| table.metadata().schema(snapshot_id).ok().cloned())
         .unwrap_or_else(|| table.current_schema(None).unwrap().clone());
-    
+
     // Create a unique URI for this particular object store
     let object_store_url = ObjectStoreUrl::parse(
         "iceberg://".to_owned() + &util::strip_prefix(&table.metadata().location).replace('/', "-"),
@@ -894,7 +894,7 @@ mod tests {
         ctx.register_table("orders", table).unwrap();
 
         ctx.sql(
-            "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES 
+            "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES
                 (1, 1, 1, '2020-01-01', 1),
                 (2, 2, 1, '2020-01-01', 1),
                 (3, 3, 1, '2020-01-01', 3),
@@ -945,7 +945,7 @@ mod tests {
         }
 
         ctx.sql(
-            "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES 
+            "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES
                 (7, 1, 3, '2020-01-03', 1),
                 (8, 2, 1, '2020-01-03', 2),
                 (9, 2, 2, '2020-01-03', 1);",
@@ -1071,7 +1071,7 @@ mod tests {
         ctx.register_table("orders", table).unwrap();
 
         ctx.sql(
-            "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES 
+            "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES
                 (1, 1, 1, '2020-01-01', 1),
                 (2, 2, 1, '2020-01-01', 1),
                 (3, 3, 1, '2020-01-01', 3),
@@ -1122,7 +1122,7 @@ mod tests {
         }
 
         ctx.sql(
-            "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES 
+            "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES
                 (7, 1, 3, '2020-01-03', 1),
                 (8, 2, 1, '2020-01-03', 2),
                 (9, 2, 2, '2020-01-03', 1);",
@@ -1255,7 +1255,7 @@ mod tests {
         ctx.register_catalog("iceberg", datafusion_catalog);
 
         ctx.sql(
-            "INSERT INTO iceberg.test.orders (id, customer_id, product_id, date, amount) VALUES 
+            "INSERT INTO iceberg.test.orders (id, customer_id, product_id, date, amount) VALUES
                 (1, 1, 1, '2020-01-01', 1),
                 (2, 2, 1, '2020-01-01', 1),
                 (3, 3, 1, '2020-01-01', 3),
@@ -1306,7 +1306,7 @@ mod tests {
         }
 
         ctx.sql(
-            "INSERT INTO iceberg.test.orders (id, customer_id, product_id, date, amount) VALUES 
+            "INSERT INTO iceberg.test.orders (id, customer_id, product_id, date, amount) VALUES
                 (7, 1, 3, '2020-01-03', 1),
                 (8, 2, 1, '2020-01-03', 2),
                 (9, 2, 2, '2020-01-03', 1);",
@@ -1431,7 +1431,7 @@ mod tests {
         ctx.register_table("orders", table).unwrap();
 
         ctx.sql(
-            "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES 
+            "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES
                 (1, 1, 1, '2020-01-01', 1),
                 (2, 2, 1, '2020-01-01', 1),
                 (3, 3, 1, '2020-01-01', 3),

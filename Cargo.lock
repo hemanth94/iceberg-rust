@@ -960,7 +960,7 @@ dependencies = [
 [[package]]
 name = "datafusion"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#72199d318e050fb7803664f70ea048b63892ee64"
+source = "git+https://github.com/dhruvils414/query-rust?branch=integration#a30a99a6e997872d267810d8cecfa1c5c82af1ad"
 dependencies = [
  "ahash 0.8.11",
  "arrow",
@@ -973,17 +973,68 @@ dependencies = [
  "bzip2",
  "chrono",
  "dashmap",
- "datafusion-common",
- "datafusion-common-runtime",
- "datafusion-execution",
- "datafusion-expr",
- "datafusion-functions",
- "datafusion-functions-aggregate",
- "datafusion-functions-array",
- "datafusion-optimizer",
- "datafusion-physical-expr",
- "datafusion-physical-plan",
- "datafusion-sql",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-common-runtime 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-execution 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-functions 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-functions-aggregate 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-functions-array 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-optimizer 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-physical-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-physical-plan 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-sql 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "flate2",
+ "futures",
+ "glob",
+ "half",
+ "hashbrown 0.14.5",
+ "indexmap 2.2.6",
+ "itertools 0.12.1",
+ "log",
+ "num_cpus",
+ "object_store",
+ "parking_lot",
+ "parquet",
+ "pin-project-lite",
+ "rand",
+ "sqlparser",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "url",
+ "uuid",
+ "xz2",
+ "zstd",
+]
+
+[[package]]
+name = "datafusion"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix#20edc4b4127394abc30aa1883d3638695419d407"
+dependencies = [
+ "ahash 0.8.11",
+ "arrow",
+ "arrow-array",
+ "arrow-ipc",
+ "arrow-schema",
+ "async-compression",
+ "async-trait",
+ "bytes",
+ "bzip2",
+ "chrono",
+ "dashmap",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-common-runtime 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-execution 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-functions 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-functions-aggregate 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-functions-array 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-optimizer 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-physical-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-physical-plan 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-sql 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
  "flate2",
  "futures",
  "glob",
@@ -1011,7 +1062,27 @@ dependencies = [
 [[package]]
 name = "datafusion-common"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#72199d318e050fb7803664f70ea048b63892ee64"
+source = "git+https://github.com/dhruvils414/query-rust?branch=integration#a30a99a6e997872d267810d8cecfa1c5c82af1ad"
+dependencies = [
+ "ahash 0.8.11",
+ "arrow",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-schema",
+ "chrono",
+ "half",
+ "instant",
+ "libc",
+ "num_cpus",
+ "object_store",
+ "parquet",
+ "sqlparser",
+]
+
+[[package]]
+name = "datafusion-common"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix#20edc4b4127394abc30aa1883d3638695419d407"
 dependencies = [
  "ahash 0.8.11",
  "arrow",
@@ -1031,7 +1102,15 @@ dependencies = [
 [[package]]
 name = "datafusion-common-runtime"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#72199d318e050fb7803664f70ea048b63892ee64"
+source = "git+https://github.com/dhruvils414/query-rust?branch=integration#a30a99a6e997872d267810d8cecfa1c5c82af1ad"
+dependencies = [
+ "tokio",
+]
+
+[[package]]
+name = "datafusion-common-runtime"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix#20edc4b4127394abc30aa1883d3638695419d407"
 dependencies = [
  "tokio",
 ]
@@ -1039,13 +1118,33 @@ dependencies = [
 [[package]]
 name = "datafusion-execution"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#72199d318e050fb7803664f70ea048b63892ee64"
+source = "git+https://github.com/dhruvils414/query-rust?branch=integration#a30a99a6e997872d267810d8cecfa1c5c82af1ad"
 dependencies = [
  "arrow",
  "chrono",
  "dashmap",
- "datafusion-common",
- "datafusion-expr",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "futures",
+ "hashbrown 0.14.5",
+ "log",
+ "object_store",
+ "parking_lot",
+ "rand",
+ "tempfile",
+ "url",
+]
+
+[[package]]
+name = "datafusion-execution"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix#20edc4b4127394abc30aa1883d3638695419d407"
+dependencies = [
+ "arrow",
+ "chrono",
+ "dashmap",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
  "futures",
  "hashbrown 0.14.5",
  "log",
@@ -1059,13 +1158,30 @@ dependencies = [
 [[package]]
 name = "datafusion-expr"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#72199d318e050fb7803664f70ea048b63892ee64"
+source = "git+https://github.com/dhruvils414/query-rust?branch=integration#a30a99a6e997872d267810d8cecfa1c5c82af1ad"
 dependencies = [
  "ahash 0.8.11",
  "arrow",
  "arrow-array",
  "chrono",
- "datafusion-common",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "paste",
+ "serde_json",
+ "sqlparser",
+ "strum 0.26.3",
+ "strum_macros 0.26.4",
+]
+
+[[package]]
+name = "datafusion-expr"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix#20edc4b4127394abc30aa1883d3638695419d407"
+dependencies = [
+ "ahash 0.8.11",
+ "arrow",
+ "arrow-array",
+ "chrono",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
  "paste",
  "serde_json",
  "sqlparser",
@@ -1076,17 +1192,43 @@ dependencies = [
 [[package]]
 name = "datafusion-functions"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#72199d318e050fb7803664f70ea048b63892ee64"
+source = "git+https://github.com/dhruvils414/query-rust?branch=integration#a30a99a6e997872d267810d8cecfa1c5c82af1ad"
 dependencies = [
  "arrow",
  "base64 0.22.1",
  "blake2",
  "blake3",
  "chrono",
- "datafusion-common",
- "datafusion-execution",
- "datafusion-expr",
- "datafusion-physical-expr",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-execution 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-physical-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "hashbrown 0.14.5",
+ "hex",
+ "itertools 0.12.1",
+ "log",
+ "md-5",
+ "rand",
+ "regex",
+ "sha2",
+ "unicode-segmentation",
+ "uuid",
+]
+
+[[package]]
+name = "datafusion-functions"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix#20edc4b4127394abc30aa1883d3638695419d407"
+dependencies = [
+ "arrow",
+ "base64 0.22.1",
+ "blake2",
+ "blake3",
+ "chrono",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-execution 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-physical-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
  "hashbrown 0.14.5",
  "hex",
  "itertools 0.12.1",
@@ -1102,13 +1244,28 @@ dependencies = [
 [[package]]
 name = "datafusion-functions-aggregate"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#72199d318e050fb7803664f70ea048b63892ee64"
+source = "git+https://github.com/dhruvils414/query-rust?branch=integration#a30a99a6e997872d267810d8cecfa1c5c82af1ad"
 dependencies = [
  "arrow",
- "datafusion-common",
- "datafusion-execution",
- "datafusion-expr",
- "datafusion-physical-expr-common",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-execution 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-physical-expr-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "log",
+ "paste",
+ "sqlparser",
+]
+
+[[package]]
+name = "datafusion-functions-aggregate"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix#20edc4b4127394abc30aa1883d3638695419d407"
+dependencies = [
+ "arrow",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-execution 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-physical-expr-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
  "log",
  "paste",
  "sqlparser",
@@ -1117,17 +1274,36 @@ dependencies = [
 [[package]]
 name = "datafusion-functions-array"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#72199d318e050fb7803664f70ea048b63892ee64"
+source = "git+https://github.com/dhruvils414/query-rust?branch=integration#a30a99a6e997872d267810d8cecfa1c5c82af1ad"
 dependencies = [
  "arrow",
  "arrow-array",
  "arrow-buffer",
  "arrow-ord",
  "arrow-schema",
- "datafusion-common",
- "datafusion-execution",
- "datafusion-expr",
- "datafusion-functions",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-execution 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-functions 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "itertools 0.12.1",
+ "log",
+ "paste",
+]
+
+[[package]]
+name = "datafusion-functions-array"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix#20edc4b4127394abc30aa1883d3638695419d407"
+dependencies = [
+ "arrow",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-ord",
+ "arrow-schema",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-execution 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-functions 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
  "itertools 0.12.1",
  "log",
  "paste",
@@ -1138,23 +1314,41 @@ name = "datafusion-iceberg-sql"
 version = "0.3.0"
 dependencies = [
  "arrow-schema",
- "datafusion-common",
- "datafusion-expr",
- "datafusion-sql",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-sql 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
  "iceberg-rust",
 ]
 
 [[package]]
 name = "datafusion-optimizer"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#72199d318e050fb7803664f70ea048b63892ee64"
+source = "git+https://github.com/dhruvils414/query-rust?branch=integration#a30a99a6e997872d267810d8cecfa1c5c82af1ad"
 dependencies = [
  "arrow",
  "async-trait",
  "chrono",
- "datafusion-common",
- "datafusion-expr",
- "datafusion-physical-expr",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-physical-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "hashbrown 0.14.5",
+ "indexmap 2.2.6",
+ "itertools 0.12.1",
+ "log",
+ "regex-syntax",
+]
+
+[[package]]
+name = "datafusion-optimizer"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix#20edc4b4127394abc30aa1883d3638695419d407"
+dependencies = [
+ "arrow",
+ "async-trait",
+ "chrono",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-physical-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
  "hashbrown 0.14.5",
  "indexmap 2.2.6",
  "itertools 0.12.1",
@@ -1165,7 +1359,7 @@ dependencies = [
 [[package]]
 name = "datafusion-physical-expr"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#72199d318e050fb7803664f70ea048b63892ee64"
+source = "git+https://github.com/dhruvils414/query-rust?branch=integration#a30a99a6e997872d267810d8cecfa1c5c82af1ad"
 dependencies = [
  "ahash 0.8.11",
  "arrow",
@@ -1176,11 +1370,41 @@ dependencies = [
  "arrow-string",
  "base64 0.22.1",
  "chrono",
- "datafusion-common",
- "datafusion-execution",
- "datafusion-expr",
- "datafusion-functions-aggregate",
- "datafusion-physical-expr-common",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-execution 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-functions-aggregate 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-physical-expr-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "half",
+ "hashbrown 0.14.5",
+ "hex",
+ "indexmap 2.2.6",
+ "itertools 0.12.1",
+ "log",
+ "paste",
+ "petgraph",
+ "regex",
+]
+
+[[package]]
+name = "datafusion-physical-expr"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix#20edc4b4127394abc30aa1883d3638695419d407"
+dependencies = [
+ "ahash 0.8.11",
+ "arrow",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-ord",
+ "arrow-schema",
+ "arrow-string",
+ "base64 0.22.1",
+ "chrono",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-execution 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-functions-aggregate 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-physical-expr-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
  "half",
  "hashbrown 0.14.5",
  "hex",
@@ -1195,17 +1419,27 @@ dependencies = [
 [[package]]
 name = "datafusion-physical-expr-common"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#72199d318e050fb7803664f70ea048b63892ee64"
+source = "git+https://github.com/dhruvils414/query-rust?branch=integration#a30a99a6e997872d267810d8cecfa1c5c82af1ad"
 dependencies = [
  "arrow",
- "datafusion-common",
- "datafusion-expr",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+]
+
+[[package]]
+name = "datafusion-physical-expr-common"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix#20edc4b4127394abc30aa1883d3638695419d407"
+dependencies = [
+ "arrow",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
 ]
 
 [[package]]
 name = "datafusion-physical-plan"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#72199d318e050fb7803664f70ea048b63892ee64"
+source = "git+https://github.com/dhruvils414/query-rust?branch=integration#a30a99a6e997872d267810d8cecfa1c5c82af1ad"
 dependencies = [
  "ahash 0.8.11",
  "arrow",
@@ -1215,13 +1449,46 @@ dependencies = [
  "arrow-schema",
  "async-trait",
  "chrono",
- "datafusion-common",
- "datafusion-common-runtime",
- "datafusion-execution",
- "datafusion-expr",
- "datafusion-functions-aggregate",
- "datafusion-physical-expr",
- "datafusion-physical-expr-common",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-common-runtime 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-execution 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-functions-aggregate 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-physical-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-physical-expr-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "futures",
+ "half",
+ "hashbrown 0.14.5",
+ "indexmap 2.2.6",
+ "itertools 0.12.1",
+ "log",
+ "once_cell",
+ "parking_lot",
+ "pin-project-lite",
+ "rand",
+ "tokio",
+]
+
+[[package]]
+name = "datafusion-physical-plan"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix#20edc4b4127394abc30aa1883d3638695419d407"
+dependencies = [
+ "ahash 0.8.11",
+ "arrow",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-ord",
+ "arrow-schema",
+ "async-trait",
+ "chrono",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-common-runtime 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-execution 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-functions-aggregate 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-physical-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-physical-expr-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
  "futures",
  "half",
  "hashbrown 0.14.5",
@@ -1238,13 +1505,28 @@ dependencies = [
 [[package]]
 name = "datafusion-sql"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#72199d318e050fb7803664f70ea048b63892ee64"
+source = "git+https://github.com/dhruvils414/query-rust?branch=integration#a30a99a6e997872d267810d8cecfa1c5c82af1ad"
 dependencies = [
  "arrow",
  "arrow-array",
  "arrow-schema",
- "datafusion-common",
- "datafusion-expr",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
+ "log",
+ "sqlparser",
+ "strum 0.26.3",
+]
+
+[[package]]
+name = "datafusion-sql"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix#20edc4b4127394abc30aa1883d3638695419d407"
+dependencies = [
+ "arrow",
+ "arrow-array",
+ "arrow-schema",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
  "log",
  "sqlparser",
  "strum 0.26.3",
@@ -1257,8 +1539,8 @@ dependencies = [
  "async-trait",
  "chrono",
  "dashmap",
- "datafusion",
- "datafusion-expr",
+ "datafusion 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
  "futures",
  "iceberg-rust",
  "iceberg-rust-spec",
@@ -2044,8 +2326,8 @@ dependencies = [
  "apache-avro",
  "arrow",
  "async-trait",
- "datafusion",
- "datafusion-expr",
+ "datafusion 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=parquet_view_scan_bugfix)",
  "derive_builder",
  "futures",
  "getrandom",
@@ -3454,7 +3736,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 name = "scratch-bin-files"
 version = "0.1.0"
 dependencies = [
- "datafusion",
+ "datafusion 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=integration)",
  "datafusion-iceberg-sql",
  "datafusion_iceberg",
  "iceberg-rust",

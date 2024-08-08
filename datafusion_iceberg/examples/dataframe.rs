@@ -38,13 +38,13 @@ pub(crate) async fn main() {
 
     let ctx = SessionContext::new();
 
-    let tableProvider = DataFusionTable::from(table);
+    //let tableProvider = DataFusionTable::from(table);
 
-    let tabular_read = tableProvider.tabular.read().await;
+    //let tabular_read = tableProvider.tabular.read().await;
 
-    let binding = tabular_read.catalog().location();
+    //let binding = tabular_read.catalog().location();
 
-    println!("{:?}",binding)
+    //println!("{:?}",binding)
     /*
 
     let df = ctx
