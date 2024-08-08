@@ -41,6 +41,7 @@ use datafusion::{
     scalar::ScalarValue,
     sql::parser::DFParser,
 };
+use datafusion_expr::FilterOp;
 
 use crate::{
     error::Error,
@@ -700,6 +701,7 @@ impl OverwriteSink for IcebergDataSink {
         input_data: SendableRecordBatchStream,
         _context: &Arc<TaskContext>,
         filter: Option<Arc<dyn PhysicalExpr>>,
+        op: FilterOp
     ) -> Result<u64, DataFusionError> {
         let mut lock = self.0.tabular.write().await;
         let table = if let Tabular::Table(table) = lock.deref_mut() {
