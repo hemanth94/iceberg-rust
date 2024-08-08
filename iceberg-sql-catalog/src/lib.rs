@@ -38,6 +38,9 @@ use sqlx::{
 use uuid::Uuid;
 
 use crate::error::Error;
+use std::any::Any;
+
+
 
 #[derive(Debug)]
 pub struct SqlCatalog {
@@ -46,6 +49,8 @@ pub struct SqlCatalog {
     object_store: Arc<dyn ObjectStore>,
     cache: Arc<DashMap<Identifier, (String, TabularMetadata)>>,
     url: String,
+    location: String,
+    region: String,
 }
 
 pub mod error;
@@ -107,6 +112,11 @@ impl SqlCatalog {
             object_store,
             cache: Arc::new(DashMap::new()),
             url: url.to_owned(),
+            location: location.to_owned(),
+            region: region
+                .map(|s| s.to_owned()) // Convert Option<&str> to Option<String>
+                .unwrap_or_else(|| "us-east-2".to_string())
+
         })
     }
 
@@ -114,13 +124,16 @@ impl SqlCatalog {
         Arc::new(SqlCatalogList {
             connection: self.connection.clone(),
             object_store: self.object_store.clone(),
-            url: self.url.to_owned()
+            url: self.url.to_owned(),
+            location: self.location.to_owned(),
+            region:  self.region.to_owned()
         })
     }
 
     pub async fn  database_url(&self) -> String {
         self.url.clone()
     }
+
 }
 
 #[derive(Debug)]
@@ -156,6 +169,18 @@ impl Catalog for SqlCatalog {
     fn database_url(&self) -> String {
         self.url.clone()
     }
+
+    fn location(&self) -> String {
+        self.location.clone()
+    }
+
+    fn region(&self) -> String {
+        self.region.to_owned()
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     /// Create a namespace in the catalog
     async fn create_namespace(
         &self,
@@ -701,7 +726,9 @@ impl SqlCatalog {
             connection: self.connection.clone(),
             object_store: self.object_store.clone(),
             cache: Arc::new(DashMap::new()),
-            url: self.url.to_owned()
+            url: self.url.to_owned(),
+            location: self.location.to_owned(),
+            region: self.region.to_owned()
         }
     }
 }
@@ -710,11 +737,13 @@ impl SqlCatalog {
 pub struct SqlCatalogList {
     connection: Arc<Mutex<AnyConnection>>,
     object_store: Arc<dyn ObjectStore>,
-    url: String
+    url: String,
+    location: String,
+    region: String
 }
 
 impl SqlCatalogList {
-    pub async fn new(url: &str, object_store: Arc<dyn ObjectStore>) -> Result<Self, Error> {
+    pub async fn new(url: &str, object_store: Arc<dyn ObjectStore>, location: &str, region: Option<&str>) -> Result<Self, Error> {
         install_default_drivers();
 
         let mut connection =
@@ -743,6 +772,10 @@ impl SqlCatalogList {
             connection: Arc::new(Mutex::new(connection)),
             object_store: object_store,
             url: url.to_owned(),
+            location: location.to_owned(),
+            region:  region
+                .map(|s| s.to_owned()) // Convert Option<&str> to Option<String>
+                .unwrap_or_else(|| "us-east-2".to_string())
         })
     }
 }
@@ -755,8 +788,9 @@ impl CatalogList for SqlCatalogList {
             connection: self.connection.clone(),
             object_store: self.object_store.clone(),
             cache: Arc::new(DashMap::new()),
-            url: self.url.to_owned()
-
+            url: self.url.to_owned(),
+            location: self.location.to_owned(),
+            region: self.region.to_owned()
         }))
     }
     async fn list_catalogs(&self) -> Vec<String> {

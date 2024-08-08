@@ -2,6 +2,7 @@
 Defines traits to communicate with an iceberg catalog.
 */
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -97,6 +98,9 @@ pub trait Catalog: Send + Sync + Debug {
     fn object_store(&self, bucket: Bucket) -> Arc<dyn ObjectStore>;
     /// Create a namespace in the catalog
     fn database_url(&self) -> String;
+    fn as_any(&self) -> &dyn Any;
+    fn location(&self) -> String;
+    fn region(&self) -> String;
 }
 
 /// Trait to obtain a catalog by name

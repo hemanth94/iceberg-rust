@@ -12,6 +12,8 @@ use object_store::ObjectStore;
 
 use std::sync::Arc;
 
+
+
 #[tokio::main]
 pub(crate) async fn main() {
     let object_store: Arc<dyn ObjectStore> =
@@ -24,9 +26,6 @@ pub(crate) async fn main() {
             .unwrap(),
     );
 
-    let db_url = catalog.database_url();
-    println!("Database URL: {}", db_url);
-
     let identifier = Identifier::parse("test.table1").unwrap();
 
     let metadata: TableMetadata= serde_json::from_slice(&object_store.get(&"/home/iceberg/warehouse/nyc/taxis/metadata/fb072c92-a02b-11e9-ae9c-1bb7bc9eca94.metadata.json".into()).await.unwrap().bytes().await.unwrap()).unwrap();
@@ -38,6 +37,15 @@ pub(crate) async fn main() {
         .expect("Failed to register table.");
 
     let ctx = SessionContext::new();
+
+    let tableProvider = DataFusionTable::from(table);
+
+    let tabular_read = tableProvider.tabular.read().await;
+
+    let binding = tabular_read.catalog().location();
+
+    println!("{:?}",binding)
+    /*
 
     let df = ctx
         .read_table(Arc::new(DataFusionTable::from(table)))
@@ -63,4 +71,6 @@ pub(crate) async fn main() {
 
     // Value can either be 0.9 or 1.8
     assert!(((1.35 - values.value(0)).abs() - 0.45).abs() < 0.001)
+
+    */
 }
