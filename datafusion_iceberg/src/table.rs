@@ -16,6 +16,7 @@ use std::{
 };
 use tokio::sync::{RwLock, RwLockWriteGuard};
 
+
 use datafusion::{
     arrow::datatypes::{Field, SchemaRef},
     common::{not_impl_err, plan_err, DataFusionError, SchemaExt},
@@ -262,6 +263,56 @@ impl TableProvider for DataFusionTable {
             .collect())
     }
 
+    async fn update_table(
+        &self,
+        _state: &SessionState,
+        input_plan: Arc<dyn ExecutionPlan>,
+        overwrite: bool,
+    ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
+        // Create Physical Execution Plan for UPDATE node
+        // on top of Physical Execution Plan of child nodes
+
+        // Check that the schema of the plan matches the schema of this table.
+        if !self.schema().equivalent_names_and_types(&input_plan.schema()) {
+            return plan_err!("Updating query must have the same schema with the table.");
+        }
+        if overwrite {
+            return not_impl_err!("Overwrite not implemented for MemoryTable yet");
+        }
+        // return Physical Execution Plan
+        Ok(Arc::new(UpdateSinkExec::new(
+            input_plan,
+            Arc::new(self.clone().into_data_sink()),
+            self.schema.clone(),
+            None,
+        )))
+    }
+
+    async fn delete_from_table(
+        &self,
+        _state: &SessionState,
+        input: Arc<dyn ExecutionPlan>,
+        overwrite: bool,
+    ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
+        // Create Physical Execution Plan for UPDATE node
+        // on top of Physical Execution Plan of child nodes
+
+        // Check that the schema of the plan matches the schema of this table.
+        if !self.schema().equivalent_names_and_types(&input.schema()) {
+            return plan_err!("Delete query must have the same schema with the table.");
+        }
+        if overwrite {
+            return not_impl_err!("Overwrite not implemented for MemoryTable yet");
+        }
+        // return Physical Execution Plan with a sink
+        // Sink will be executed, and written into RecordBatches
+        Ok(Arc::new(DeleteSinkExec::new(
+            input,
+            Arc::new(self.clone().into_data_sink()),
+            self.schema.clone(),
+            None,
+        )))
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
