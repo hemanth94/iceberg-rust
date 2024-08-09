@@ -25,7 +25,7 @@ use datafusion::{
         listing::PartitionedFile,
         object_store::ObjectStoreUrl,
         physical_plan::FileScanConfig,
-        TableProvider, ViewTable,
+        provider::TableProvider, ViewTable,
     },
     execution::{context::SessionState, TaskContext},
     logical_expr::{TableProviderFilterPushDown, TableType},
