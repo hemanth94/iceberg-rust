@@ -9,7 +9,7 @@ use iceberg_rust::spec::table_metadata::TableMetadata;
 use iceberg_sql_catalog::SqlCatalog;
 use object_store::local::LocalFileSystem;
 use object_store::ObjectStore;
-
+use datafusion_iceberg::catalog::catalog::IcebergCatalog;
 use std::sync::Arc;
 
 
@@ -25,6 +25,19 @@ pub(crate) async fn main() {
             .await
             .unwrap(),
     );
+
+    let datafusion_catalog = Arc::new(
+        IcebergCatalog::new(catalog, None)
+            .await
+            .expect("Failed to create datafusion catalog"),
+    );
+
+    let ctx = SessionContext::new();
+
+    ctx.register_catalog("iceberg", datafusion_catalog);
+
+    /*
+
 
     let identifier = Identifier::parse("test.table1").unwrap();
 
@@ -45,7 +58,7 @@ pub(crate) async fn main() {
     //let binding = tabular_read.catalog().location();
 
     //println!("{:?}",binding)
-    /*
+
 
     let df = ctx
         .read_table(Arc::new(DataFusionTable::from(table)))
