@@ -2,6 +2,7 @@ use datafusion::arrow::array::Float32Array;
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::prelude::SessionContext;
 use datafusion_expr::{col, min};
+use datafusion_iceberg::catalog::catalog::IcebergCatalog;
 use datafusion_iceberg::DataFusionTable;
 use iceberg_rust::catalog::identifier::Identifier;
 use iceberg_rust::catalog::Catalog;
@@ -9,19 +10,15 @@ use iceberg_rust::spec::table_metadata::TableMetadata;
 use iceberg_sql_catalog::SqlCatalog;
 use object_store::local::LocalFileSystem;
 use object_store::ObjectStore;
-use datafusion_iceberg::catalog::catalog::IcebergCatalog;
 use std::sync::Arc;
-
-
 
 #[tokio::main]
 pub(crate) async fn main() {
     let object_store: Arc<dyn ObjectStore> =
         Arc::new(LocalFileSystem::new_with_prefix("iceberg-tests/nyc_taxis").unwrap());
 
-
     let catalog: Arc<dyn Catalog> = Arc::new(
-        SqlCatalog::new("sqlite://", "test", "iceberg-tests/nyc_taxis", None )
+        SqlCatalog::new("sqlite://", "test", "iceberg-tests/nyc_taxis", None)
             .await
             .unwrap(),
     );

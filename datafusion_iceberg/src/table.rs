@@ -12,10 +12,10 @@ use std::{
     collections::{HashMap, HashSet},
     fmt,
     ops::{Deref, DerefMut},
-    sync::Arc, vec,
+    sync::Arc,
+    vec,
 };
 use tokio::sync::{RwLock, RwLockWriteGuard};
-
 
 use datafusion::{
     arrow::datatypes::{Field, SchemaRef},
@@ -25,17 +25,18 @@ use datafusion::{
         listing::PartitionedFile,
         object_store::ObjectStoreUrl,
         physical_plan::FileScanConfig,
-        provider::TableProvider, ViewTable,
+        provider::TableProvider,
+        ViewTable,
     },
     execution::{context::SessionState, TaskContext},
     logical_expr::{TableProviderFilterPushDown, TableType},
     physical_expr::{create_physical_expr, PhysicalExpr},
     physical_optimizer::pruning::PruningPredicate,
     physical_plan::{
-        insert::{DataSink, DataSinkExec},
-        upsert::{OverwriteSink, UpdateSinkExec},
         delete::DeleteSinkExec,
+        insert::{DataSink, DataSinkExec},
         metrics::MetricsSet,
+        upsert::{OverwriteSink, UpdateSinkExec},
         DisplayAs, DisplayFormatType, ExecutionPlan, SendableRecordBatchStream, Statistics,
     },
     prelude::Expr,
@@ -44,21 +45,21 @@ use datafusion::{
 };
 use datafusion_expr::FilterOp;
 
-use crate::{
-    error::Error,
-    statistics::manifest_statistics,
-};
+use crate::{error::Error, statistics::manifest_statistics};
 
 use iceberg_rust::{
-    arrow::write::write_parquet_partitioned, catalog::tabular::Tabular,
-    materialized_view::MaterializedView, table::Table, view::View,
+    arrow::write::write_parquet_partitioned,
+    catalog::tabular::Tabular,
+    materialized_view::MaterializedView,
     table::pruning_statistics::{PruneDataFiles, PruneManifests},
+    table::Table,
+    view::View,
 };
 use iceberg_rust_spec::spec::{
+    manifest::Status,
     schema::Schema,
     types::{StructField, StructType},
     view_metadata::ViewRepresentation,
-    manifest::Status,
 };
 use iceberg_rust_spec::util;
 // mod value;
@@ -273,7 +274,10 @@ impl TableProvider for DataFusionTable {
         // on top of Physical Execution Plan of child nodes
 
         // Check that the schema of the plan matches the schema of this table.
-        if !self.schema().equivalent_names_and_types(&input_plan.schema()) {
+        if !self
+            .schema()
+            .equivalent_names_and_types(&input_plan.schema())
+        {
             return plan_err!("Updating query must have the same schema with the table.");
         }
         if overwrite {
@@ -398,18 +402,15 @@ async fn table_scan(
                 })
                 .cloned(),
         );
-        let manifests = match table
-            .manifests(snapshot_range.0, snapshot_range.1)
-            .await
-            {
-                Ok(manifests) => manifests,
-                Err(e) => {
-                    return Err(DataFusionError::Execution(format!(
-                        "Error reading manifest list: {}",
-                        e
-                    )))
-                }
-            };
+        let manifests = match table.manifests(snapshot_range.0, snapshot_range.1).await {
+            Ok(manifests) => manifests,
+            Err(e) => {
+                return Err(DataFusionError::Execution(format!(
+                    "Error reading manifest list: {}",
+                    e
+                )))
+            }
+        };
 
         // If there is a filter expression on the partition column, the manifest files to read are pruned.
         let data_files = if let Some(predicate) = partition_predicates {
@@ -490,17 +491,15 @@ async fn table_scan(
             });
     } else {
         println!("In the scan without predicate");
-        let manifests = match table
-            .manifests(snapshot_range.0, snapshot_range.1)
-            .await {
-                Ok(manifests) => manifests,
-                Err(e) => {
-                    return Err(DataFusionError::Execution(format!(
-                        "Error reading manifest list: {}",
-                        e
-                    )))
-                },
-            };
+        let manifests = match table.manifests(snapshot_range.0, snapshot_range.1).await {
+            Ok(manifests) => manifests,
+            Err(e) => {
+                return Err(DataFusionError::Execution(format!(
+                    "Error reading manifest list: {}",
+                    e
+                )))
+            }
+        };
         let data_files = table
             .datafiles(&manifests, None)
             .await
@@ -686,7 +685,6 @@ impl DataSink for IcebergDataSink {
     }
 }
 
-
 #[async_trait]
 impl OverwriteSink for IcebergDataSink {
     fn as_any(&self) -> &dyn Any {
@@ -702,7 +700,7 @@ impl OverwriteSink for IcebergDataSink {
         input_data: SendableRecordBatchStream,
         _context: &Arc<TaskContext>,
         filter: Option<Arc<dyn PhysicalExpr>>,
-        op: FilterOp
+        op: FilterOp,
     ) -> Result<u64, DataFusionError> {
         let mut lock = self.0.tabular.write().await;
         let table = if let Tabular::Table(table) = lock.deref_mut() {
@@ -724,9 +722,12 @@ impl OverwriteSink for IcebergDataSink {
 
         // STEP 1 : Delete the files where rows need to be changed
         // STEP 2 : Append the new files
-        table.new_transaction(self.0.branch.as_deref())
-        .overwrite(filter, new_files)
-        .commit().await.map_err(Into::<Error>::into)?;
+        table
+            .new_transaction(self.0.branch.as_deref())
+            .overwrite(filter, new_files)
+            .commit()
+            .await
+            .map_err(Into::<Error>::into)?;
 
         Ok(0)
     }

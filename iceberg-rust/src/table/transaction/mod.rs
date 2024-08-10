@@ -79,15 +79,19 @@ impl<'table> TableTransaction<'table> {
         self
     }
     /// Quickly Update table for UPDATE/DELETE operations
-    pub fn overwrite(mut self, filter: Option<Arc<dyn PhysicalExpr>>, new_files: Vec<DataFile> ) -> Self {
+    pub fn overwrite(
+        mut self,
+        filter: Option<Arc<dyn PhysicalExpr>>,
+        new_files: Vec<DataFile>,
+    ) -> Self {
         self.operations.insert(
             OVERWRITE_KEY.to_owned(),
             Operation::Filter {
                 branch: self.branch.clone(),
                 filter,
                 lineage: None,
-                new_files
-            }
+                new_files,
+            },
         );
         self
     }
@@ -161,8 +165,7 @@ impl<'table> TableTransaction<'table> {
         let identifier = self.table.identifier.clone();
 
         // Save old metadata to be able to remove old data after a rewrite operation
-        let delete_data = if self.operations.values().any(
-            |x| {
+        let delete_data = if self.operations.values().any(|x| {
             matches!(
                 x,
                 Operation::Rewrite {
@@ -170,8 +173,8 @@ impl<'table> TableTransaction<'table> {
                     files: _,
                     lineage: _,
                 }
-            )}
-        ) {
+            )
+        }) {
             Some(self.table.metadata())
         } else {
             None
@@ -181,16 +184,12 @@ impl<'table> TableTransaction<'table> {
         let (mut requirements, mut updates) = (Vec::new(), Vec::new());
         for operation in self.operations.into_values() {
             let (requirement, update) = operation
-                .execute(
-                    self.table,
-                    self.table.metadata(),
-                    self.table.object_store()
-                )
+                .execute(self.table, self.table.metadata(), self.table.object_store())
                 .await
                 .map_err(|e| {
-                     println!("Error executing table operation: {:?}", e);
-                     e
-                 })?;
+                    println!("Error executing table operation: {:?}", e);
+                    e
+                })?;
 
             if let Some(requirement) = requirement {
                 requirements.push(requirement);

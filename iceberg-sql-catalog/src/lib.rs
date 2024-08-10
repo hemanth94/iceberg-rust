@@ -15,10 +15,8 @@ use iceberg_rust::{
         tabular::Tabular,
         Catalog, CatalogList,
     },
-    io::{
-        object_store::get_object_store
-    },
     error::Error as IcebergError,
+    io::object_store::get_object_store,
     materialized_view::MaterializedView,
     spec::{
         materialized_view_metadata::MaterializedViewMetadata,
@@ -39,8 +37,6 @@ use uuid::Uuid;
 
 use crate::error::Error;
 use std::any::Any;
-
-
 
 #[derive(Debug)]
 pub struct SqlCatalog {
@@ -64,7 +60,7 @@ impl SqlCatalog {
     ) -> Result<Self, Error> {
         install_default_drivers();
 
-        let object_store: Arc<dyn ObjectStore> = get_object_store(&location,region);
+        let object_store: Arc<dyn ObjectStore> = get_object_store(&location, region);
 
         let mut connection =
             AnyConnectOptions::connect(&AnyConnectOptions::from_url(&url.try_into()?)?).await?;
@@ -115,8 +111,7 @@ impl SqlCatalog {
             location: location.to_owned(),
             region: region
                 .map(|s| s.to_owned()) // Convert Option<&str> to Option<String>
-                .unwrap_or_else(|| "us-east-2".to_string())
-
+                .unwrap_or_else(|| "us-east-2".to_string()),
         })
     }
 
@@ -126,14 +121,13 @@ impl SqlCatalog {
             object_store: self.object_store.clone(),
             url: self.url.to_owned(),
             location: self.location.to_owned(),
-            region:  self.region.to_owned()
+            region: self.region.to_owned(),
         })
     }
 
-    pub async fn  database_url(&self) -> String {
+    pub async fn database_url(&self) -> String {
         self.url.clone()
     }
-
 }
 
 #[derive(Debug)]
@@ -165,7 +159,6 @@ fn query_map(row: &AnyRow) -> Result<TableRef, sqlx::Error> {
 
 #[async_trait]
 impl Catalog for SqlCatalog {
-
     fn database_url(&self) -> String {
         self.url.clone()
     }
@@ -728,7 +721,7 @@ impl SqlCatalog {
             cache: Arc::new(DashMap::new()),
             url: self.url.to_owned(),
             location: self.location.to_owned(),
-            region: self.region.to_owned()
+            region: self.region.to_owned(),
         }
     }
 }
@@ -739,11 +732,16 @@ pub struct SqlCatalogList {
     object_store: Arc<dyn ObjectStore>,
     url: String,
     location: String,
-    region: String
+    region: String,
 }
 
 impl SqlCatalogList {
-    pub async fn new(url: &str, object_store: Arc<dyn ObjectStore>, location: &str, region: Option<&str>) -> Result<Self, Error> {
+    pub async fn new(
+        url: &str,
+        object_store: Arc<dyn ObjectStore>,
+        location: &str,
+        region: Option<&str>,
+    ) -> Result<Self, Error> {
         install_default_drivers();
 
         let mut connection =
@@ -773,9 +771,9 @@ impl SqlCatalogList {
             object_store: object_store,
             url: url.to_owned(),
             location: location.to_owned(),
-            region:  region
+            region: region
                 .map(|s| s.to_owned()) // Convert Option<&str> to Option<String>
-                .unwrap_or_else(|| "us-east-2".to_string())
+                .unwrap_or_else(|| "us-east-2".to_string()),
         })
     }
 }
@@ -790,7 +788,7 @@ impl CatalogList for SqlCatalogList {
             cache: Arc::new(DashMap::new()),
             url: self.url.to_owned(),
             location: self.location.to_owned(),
-            region: self.region.to_owned()
+            region: self.region.to_owned(),
         }))
     }
     async fn list_catalogs(&self) -> Vec<String> {

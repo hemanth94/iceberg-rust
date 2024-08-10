@@ -21,9 +21,9 @@ use crate::{
     table::transaction::TableTransaction,
 };
 
+pub mod pruning_statistics;
 pub mod table_builder;
 pub mod transaction;
-pub mod pruning_statistics;
 
 #[derive(Debug)]
 /// Iceberg table
@@ -106,16 +106,17 @@ impl Table {
                         Some(sequence_number)
                     }
                 });
-        
+
         let iter = match end_snapshot
             .manifests(metadata, self.object_store().clone())
-            .await {
-                Ok(iter) => iter,
-                Err(_e) => {
-                    // return an empty vector
-                    return Ok(vec![]);
-                }
-            };
+            .await
+        {
+            Ok(iter) => iter,
+            Err(_e) => {
+                // return an empty vector
+                return Ok(vec![]);
+            }
+        };
 
         match start_sequence_number {
             Some(start) => iter
@@ -191,7 +192,7 @@ async fn datafiles(
                     object_store
                         .get(&path)
                         .and_then(|file| file.bytes())
-                        .await?
+                        .await?,
                 ));
                 let reader = ManifestReader::new(bytes)?;
                 Ok(stream::iter(reader))

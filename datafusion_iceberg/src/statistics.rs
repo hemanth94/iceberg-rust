@@ -6,7 +6,11 @@ use datafusion::{
     scalar::ScalarValue,
 };
 use iceberg_rust::{catalog::tabular::Tabular, table::Table};
-use iceberg_rust_spec::spec::{manifest::{ManifestEntry, Status}, schema::Schema, values::Value};
+use iceberg_rust_spec::spec::{
+    manifest::{ManifestEntry, Status},
+    schema::Schema,
+    values::Value,
+};
 
 use crate::error::Error;
 
@@ -37,9 +41,16 @@ pub(crate) async fn table_statistics(
         .unwrap_or_else(|| table.current_schema(None).unwrap().clone());
     let manifests = table.manifests(snapshot_range.0, snapshot_range.1).await?;
     let datafiles = table.datafiles(&manifests, None).await?;
-    let file_groups: Vec<ManifestEntry> = datafiles.into_iter().filter(|manifest| {
-        if *manifest.status() == Status::Deleted { false } else { true }
-    }).collect();
+    let file_groups: Vec<ManifestEntry> = datafiles
+        .into_iter()
+        .filter(|manifest| {
+            if *manifest.status() == Status::Deleted {
+                false
+            } else {
+                true
+            }
+        })
+        .collect();
 
     Ok(file_groups.iter().fold(
         Statistics {
@@ -56,8 +67,8 @@ pub(crate) async fn table_statistics(
             ],
         },
         |acc, manifest| {
-                let column_stats = column_statistics(&schema, manifest);
-                Statistics {
+            let column_stats = column_statistics(&schema, manifest);
+            Statistics {
                 num_rows: acc.num_rows.add(&Precision::Exact(
                     *manifest.data_file().record_count() as usize
                 )),
@@ -75,7 +86,7 @@ pub(crate) async fn table_statistics(
                         distinct_count: acc.distinct_count.add(&x.distinct_count),
                     })
                     .collect(),
-                }
+            }
         },
     ))
 }

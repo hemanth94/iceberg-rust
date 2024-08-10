@@ -1,14 +1,11 @@
-use std::sync::Arc;
-use url::Url;
-use object_store::ObjectStore;
 use object_store::aws::AmazonS3Builder;
 use object_store::local::LocalFileSystem;
 use object_store::memory::InMemory;
+use object_store::ObjectStore;
+use std::sync::Arc;
+use url::Url;
 
-pub fn get_object_store(
-    url: &str,
-    region: Option<&str>,
-) -> Arc<dyn ObjectStore> {
+pub fn get_object_store(url: &str, region: Option<&str>) -> Arc<dyn ObjectStore> {
     let region = region.unwrap_or("us-east-1");
 
     if url.starts_with("s3://") {
@@ -33,9 +30,8 @@ pub fn get_object_store(
                     .expect("Failed to build OSS object store"),
             );
         }
-    } else if  url.starts_with("InMemory") {
+    } else if url.starts_with("InMemory") {
         return Arc::new(InMemory::new());
-
     } else {
         return Arc::new(
             LocalFileSystem::new_with_prefix(url)

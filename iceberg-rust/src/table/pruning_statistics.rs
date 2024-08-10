@@ -6,7 +6,7 @@
  * 1. Prune ManifestFiles based on information in Manifest_list_file
  * 2. Prune DataFiles based on information in Manifest_file
  *
- * For the first level the triat PruningStatistics is implemented for the DataFusionTable. 
+ * For the first level the triat PruningStatistics is implemented for the DataFusionTable.
  * It returns the pruning information for the manifest files
  * and not the final data files.
  *
