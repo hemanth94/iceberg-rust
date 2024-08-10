@@ -16,6 +16,7 @@ serde_json = { workspace = true }
 async-trait = { workspace = true }
 datafusion = { workspace = true }
 datafusion-expr = { workspace = true }
+datafusion-proto = {workspace = true}
 chrono = { workspace = true }
 object_store = { workspace = true }
 iceberg-rust = { path = "../iceberg-rust", version = "0.3.0" }

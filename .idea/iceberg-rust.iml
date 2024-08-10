@@ -5,8 +5,6 @@
       <sourceFolder url="file://$MODULE_DIR$/datafusion-iceberg-sql/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/datafusion_iceberg/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/datafusion_iceberg/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/datafusion_iceberg/tests" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/iceberg-rest-catalog/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/iceberg-rust-spec/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/iceberg-rust/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/iceberg-sql-catalog/src" isTestSource="false" />

@@ -24,6 +24,7 @@ datafusion = { git = "https://github.com/dhruvils414/query-rust", branch = "inte
 datafusion-sql = { git = "https://github.com/dhruvils414/query-rust", branch = "integration" }
 datafusion-expr = { git = "https://github.com/dhruvils414/query-rust", branch = "integration" }
 datafusion-common = { git = "https://github.com/dhruvils414/query-rust", branch = "integration" }
+datafusion-proto = { git = "https://github.com/dhruvils414/query-rust", branch = "integration" }
 parquet = { version = "51.0.0", features = ["async", "object_store"] }
 sqlparser = { version = "0.45.0", features = ["visitor"] }
 thiserror = "1.0"
