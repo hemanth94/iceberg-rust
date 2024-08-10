@@ -6,6 +6,7 @@ use std::sync::Arc;
 use url::Url;
 
 pub fn get_object_store(url: &str, region: Option<&str>) -> Arc<dyn ObjectStore> {
+    println!("In the object store {:?}", url);
     let region = region.unwrap_or("us-east-1");
 
     if url.starts_with("s3://") {

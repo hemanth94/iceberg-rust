@@ -60,8 +60,6 @@ impl SqlCatalog {
     ) -> Result<Self, Error> {
         install_default_drivers();
 
-        println!("url {:?}", url);
-
         let object_store: Arc<dyn ObjectStore> = get_object_store(&location, region);
 
         let mut connection =
