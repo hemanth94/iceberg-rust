@@ -350,8 +350,6 @@ async fn table_scan(
     let object_store_url = ObjectStoreUrl::parse(
         "iceberg://".to_owned() + &util::strip_prefix(&table.metadata().location).replace('/', "-"),
     )?;
-    println!("object_store_url {:?}", object_store_url);
-    println!("table.object_store() {:?}", table.object_store());
 
     session
         .runtime_env()
@@ -552,8 +550,6 @@ async fn table_scan(
         });
     };
 
-
-    eprintln!("Out side if groups");
     // Get all partition columns
     let table_partition_cols: Vec<Field> = table
         .metadata()
@@ -577,6 +573,7 @@ async fn table_scan(
         .collect::<Result<Vec<_>, DataFusionError>>()
         .map_err(Into::<Error>::into)?;
 
+    println!("Add the partition columns to the table schema");
     // Add the partition columns to the table schema
     let mut schema_builder = StructType::builder();
     for field in schema.fields().iter() {
@@ -597,6 +594,8 @@ async fn table_scan(
             doc: None,
         });
     }
+
+    println!("schema builder");
     let file_schema = Schema::builder()
         .with_schema_id(*schema.schema_id())
         .with_fields(
@@ -610,6 +609,8 @@ async fn table_scan(
         .map_err(Error::from)?;
 
     let file_schema: SchemaRef = Arc::new((file_schema.fields()).try_into().unwrap());
+
+    println!("File Scan config");
 
     let file_scan_config = FileScanConfig {
         object_store_url,
