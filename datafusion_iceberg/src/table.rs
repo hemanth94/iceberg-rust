@@ -179,6 +179,7 @@ impl TableProvider for DataFusionTable {
         filters: &[Expr],
         limit: Option<usize>,
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
+        println!("in the scan");
         let table_state = self.tabular.read().await;
 
         match table_state.deref() {
