@@ -495,7 +495,8 @@ async fn table_scan(
                 };
             });
     } else {
-        println!("In the scan without predicate");
+        //println!("In the scan without predicate");
+        println!("object_store_url {:}",object_store_url);
         let manifests = match table.manifests(snapshot_range.0, snapshot_range.1).await {
             Ok(manifests) => manifests,
             Err(e) => {
@@ -510,7 +511,7 @@ async fn table_scan(
             .await
             .map_err(Into::<Error>::into)?;
         data_files.into_iter().for_each(|manifest| {
-            eprintln!("Manifest Status: {:?}", manifest.status());
+            //eprintln!("Manifest Status: {:?}", manifest.status());
             if *manifest.status() != Status::Deleted {
                 let partition_values = manifest
                     .data_file()
@@ -545,10 +546,14 @@ async fn table_scan(
                     .entry(file.partition_values.clone())
                     .or_default()
                     .push(file);
+
+
             }
         });
     };
 
+
+    eprintln!("Out side if groups");
     // Get all partition columns
     let table_partition_cols: Vec<Field> = table
         .metadata()
