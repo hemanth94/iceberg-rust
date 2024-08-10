@@ -179,7 +179,7 @@ impl TableProvider for DataFusionTable {
         filters: &[Expr],
         limit: Option<usize>,
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
-        println!("in the scan");
+
         let table_state = self.tabular.read().await;
 
         match table_state.deref() {
@@ -345,9 +345,6 @@ async fn table_scan(
         .1
         .and_then(|snapshot_id| table.metadata().schema(snapshot_id).ok().cloned())
         .unwrap_or_else(|| table.current_schema(None).unwrap().clone());
-
-    println!("object_store_url {:?}", &table.metadata().location);
-    println!("table.object_store() {:?}", table.object_store());
 
     // Create a unique URI for this particular object store
     let object_store_url = ObjectStoreUrl::parse(

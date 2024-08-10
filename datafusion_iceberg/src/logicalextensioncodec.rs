@@ -132,7 +132,7 @@ impl LogicalExtensionCodec for IcebergExtensionCodec {
             url: url,
         };
 
-        //println!("{:?}",msg);
+        println!("{:?}",msg);
         msg.encode(buf)
             .map_err(|_| DataFusionError::Internal("Error encoding test table".to_string()))
     }
