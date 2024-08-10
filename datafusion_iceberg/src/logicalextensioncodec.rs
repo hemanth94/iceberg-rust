@@ -3,7 +3,7 @@ use datafusion::logical_expr::Extension;
 use datafusion::logical_expr::LogicalPlan;
 
 use datafusion::prelude::SessionContext;
-use datafusion_iceberg::catalog::catalog::IcebergCatalog;
+use crate::catalog::catalog::IcebergCatalog;
 
 use datafusion_proto::logical_plan::LogicalExtensionCodec;
 
@@ -20,7 +20,7 @@ use datafusion_common::{
     DataFusionError, Result
 };
 use prost::Message;
-use datafusion_iceberg::DataFusionTable;
+use crate::DataFusionTable;
 
 use datafusion_proto::bytes::{
     logical_plan_to_bytes_with_extension_codec,logical_plan_from_bytes_with_extension_codec
@@ -117,14 +117,9 @@ impl LogicalExtensionCodec for IcebergExtensionCodec {
             }
         };
 
-        // Now you can convert `table` to `DataFusionTable`
         let table_provider = DataFusionTable::from(table);
 
         let table_provider_arc: Arc<dyn TableProvider> = Arc::new(table_provider);
-
-
-        //println!("{:?}", table_provider);
-
 
         Ok(table_provider_arc)
     }

@@ -21,13 +21,17 @@ chrono = { workspace = true }
 object_store = { workspace = true }
 iceberg-rust = { path = "../iceberg-rust", version = "0.3.0" }
 iceberg-rust-spec = { path = "../iceberg-rust-spec", version = "0.3.0" }
+iceberg-sql-catalog = { path = "../iceberg-sql-catalog" }
 itertools = { workspace = true }
 dashmap = "5.4.0"
 uuid = { workspace = true }
 thiserror = { workspace = true }
 tokio = { version = "1.0", features = ["sync","rt-multi-thread"] }
-
+lazy_static = "1.5.0"
+prost = "0.12.6"
+datafusion-common = { git = "https://github.com/dhruvils414/query-rust", branch = "integration" }
 
 [dev-dependencies]
 tokio = "1"
 iceberg-sql-catalog = { path = "../iceberg-sql-catalog" }
+
