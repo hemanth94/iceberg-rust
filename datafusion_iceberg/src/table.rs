@@ -349,9 +349,13 @@ async fn table_scan(
     let object_store_url = ObjectStoreUrl::parse(
         "iceberg://".to_owned() + &util::strip_prefix(&table.metadata().location).replace('/', "-"),
     )?;
+    println!("object_store_url {:?}", object_store_url);
+    println!("table.object_store() {:?}", table.object_store());
+
     session
         .runtime_env()
         .register_object_store(object_store_url.as_ref(), table.object_store());
+
 
     // All files have to be grouped according to their partition values. This is done by using a HashMap with the partition values as the key.
     // This way data files with the same partition value are mapped to the same vector.
