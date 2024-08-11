@@ -350,7 +350,7 @@ async fn table_scan(
 
     // Create a unique URI for this particular object store
     let object_store_url = ObjectStoreUrl::parse(
-        "iceberg://".to_owned() + location,
+        "iceberg://".to_owned() + "dhruvil",
     )?;
 
     println!("catalog {:?}", table.catalog().location() );
