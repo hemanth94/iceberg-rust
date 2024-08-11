@@ -346,9 +346,11 @@ async fn table_scan(
         .and_then(|snapshot_id| table.metadata().schema(snapshot_id).ok().cloned())
         .unwrap_or_else(|| table.current_schema(None).unwrap().clone());
 
+    let location: &str = &table.catalog().location().to_owned();
+
     // Create a unique URI for this particular object store
     let object_store_url = ObjectStoreUrl::parse(
-        "iceberg://".to_owned() + &util::strip_prefix(&table.metadata().location).replace('/', "-"),
+        "iceberg://".to_owned() + location,
     )?;
 
     println!("catalog {:?}", table.catalog().location() );
