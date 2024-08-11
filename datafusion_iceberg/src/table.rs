@@ -351,6 +351,9 @@ async fn table_scan(
         "iceberg://".to_owned() + &util::strip_prefix(&table.metadata().location).replace('/', "-"),
     )?;
 
+    println!("catalog {:?}", table.catalog().location() );
+
+
     session
         .runtime_env()
         .register_object_store(object_store_url.as_ref(), table.object_store());
@@ -451,7 +454,7 @@ async fn table_scan(
         let files_to_prune =
             pruning_predicate.prune(&PruneDataFiles::new(&schema, &arrow_schema, &data_files))?;
 
-        println!("Reaching");
+        //println!("Reaching");
         data_files
             .into_iter()
             .zip(files_to_prune.into_iter())
@@ -494,7 +497,7 @@ async fn table_scan(
             });
     } else {
         //println!("In the scan without predicate");
-        println!("object_store_url {:}",object_store_url);
+        //println!("object_store_url {:}",object_store_url);
         let manifests = match table.manifests(snapshot_range.0, snapshot_range.1).await {
             Ok(manifests) => manifests,
             Err(e) => {
@@ -622,6 +625,8 @@ async fn table_scan(
         table_partition_cols,
         output_ordering: vec![],
     };
+
+    println!("ParquetFormat");
 
     ParquetFormat::default()
         .create_physical_plan(session, file_scan_config, physical_predicate.as_ref())
