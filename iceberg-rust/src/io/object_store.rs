@@ -20,7 +20,9 @@ pub fn get_object_store(url: &str, region: Option<&str>) -> Arc<dyn ObjectStore>
                     .build()
                     .unwrap(),
             );
+            return object_store;
 
+            /*
             return Arc::new(
                 AmazonS3Builder::from_env()
                     .with_bucket_name(bucket_name)
@@ -28,6 +30,9 @@ pub fn get_object_store(url: &str, region: Option<&str>) -> Arc<dyn ObjectStore>
                     .build()
                     .expect("Failed to build Amazon S3 object store"),
             );
+            */
+
+
 
 
         }
