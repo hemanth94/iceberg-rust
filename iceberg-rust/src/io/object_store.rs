@@ -22,19 +22,6 @@ pub fn get_object_store(url: &str, region: Option<&str>) -> Arc<dyn ObjectStore>
             );
             return object_store;
 
-            /*
-            return Arc::new(
-                AmazonS3Builder::from_env()
-                    .with_bucket_name(bucket_name)
-                    .with_region(region)
-                    .build()
-                    .expect("Failed to build Amazon S3 object store"),
-            );
-            */
-
-
-
-
         }
     } else if url.starts_with("oss://") {
         let url = Url::parse(url).expect("Failed to parse OSS URL");
