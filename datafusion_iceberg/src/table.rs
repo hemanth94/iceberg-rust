@@ -518,6 +518,8 @@ async fn table_scan(
             .datafiles(&manifests, None)
             .await
             .map_err(Into::<Error>::into)?;
+
+        println!("data file {:?}", data_files);
         data_files.into_iter().for_each(|manifest| {
             //eprintln!("Manifest Status: {:?}", manifest.status());
             if *manifest.status() != Status::Deleted {
