@@ -354,7 +354,7 @@ async fn table_scan(
     let region: &str = &table.catalog().region().to_owned();
 
     let result = build_object_store_url(location, region);
-    println!("{}", result);  // Output: s3://New~NY
+    println!("{}", result);
 
     // Create a unique URI for this particular object store
     let object_store_url = ObjectStoreUrl::parse(
