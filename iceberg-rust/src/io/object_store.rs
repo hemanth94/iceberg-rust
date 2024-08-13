@@ -6,19 +6,24 @@ use std::sync::Arc;
 use url::Url;
 
 pub fn get_object_store(url: &str, region: Option<&str>) -> Arc<dyn ObjectStore> {
-    println!("In the object store : {:?}", url);
     let region = region.unwrap_or("us-east-1");
 
     if url.starts_with("s3://") {
         let url = Url::parse(url).expect("Failed to parse S3 URL");
         if let Some(bucket_name) = url.host_str() {
-            return Arc::new(
-                AmazonS3Builder::from_env()
+            let object_store: Arc<dyn ObjectStore> = Arc::new(
+                AmazonS3Builder::new()
+                    .with_region("us-east-1")
                     .with_bucket_name(bucket_name)
-                    .with_region(region)
+                    .with_access_key_id("AKIAYL6B24VPEGJVNVK2")
+                    .with_secret_access_key("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")
                     .build()
-                    .expect("Failed to build Amazon S3 object store"),
+                    .unwrap(),
             );
+
+            return object_store;
+
+
         }
     } else if url.starts_with("oss://") {
         let url = Url::parse(url).expect("Failed to parse OSS URL");

@@ -69,8 +69,6 @@ impl LogicalExtensionCodec for IcebergExtensionCodec {
         let msg = TableProto::decode(buf)
             .map_err(|_| DataFusionError::Internal("Error decoding test table".to_string()))?;
 
-        println!("{:?}", msg);
-
         let catalog: Arc<dyn Catalog> = tokio::task::block_in_place(|| {
             // Block on the async read call
             let rt = tokio::runtime::Runtime::new().unwrap();
@@ -131,8 +129,6 @@ impl LogicalExtensionCodec for IcebergExtensionCodec {
             region: region,
             url: url,
         };
-
-        println!("{:?}",msg);
         msg.encode(buf)
             .map_err(|_| DataFusionError::Internal("Error encoding test table".to_string()))
     }
