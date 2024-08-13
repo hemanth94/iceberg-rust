@@ -11,6 +11,15 @@ pub fn get_object_store(url: &str, region: Option<&str>) -> Arc<dyn ObjectStore>
     if url.starts_with("s3://") {
         let url = Url::parse(url).expect("Failed to parse S3 URL");
         if let Some(bucket_name) = url.host_str() {
+            let object_store: Arc<dyn ObjectStore> = Arc::new(
+                AmazonS3Builder::new()
+                    // .with_region(region)
+                    .with_bucket_name(bucket_name)
+                    .with_access_key_id("AKIAYL6B24VPEGJVNVK2")
+                    .with_secret_access_key("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")
+                    .build()
+                    .unwrap(),
+            );
 
             return Arc::new(
                 AmazonS3Builder::from_env()
@@ -19,6 +28,7 @@ pub fn get_object_store(url: &str, region: Option<&str>) -> Arc<dyn ObjectStore>
                     .build()
                     .expect("Failed to build Amazon S3 object store"),
             );
+
 
         }
     } else if url.starts_with("oss://") {
