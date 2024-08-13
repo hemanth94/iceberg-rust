@@ -236,7 +236,7 @@ mod tests {
         let object_store: Arc<dyn ObjectStore> = Arc::new(InMemory::new());
 
         let catalog_list = Arc::new(
-            SqlCatalogList::new("sqlite://", object_store.clone())
+            SqlCatalogList::new("sqlite://",  "inMemory", None)
                 .await
                 .unwrap(),
         );

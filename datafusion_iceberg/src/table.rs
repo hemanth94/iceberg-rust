@@ -787,7 +787,7 @@ mod tests {
             Arc::new(LocalFileSystem::new_with_prefix("../iceberg-tests/nyc_taxis").unwrap());
 
         let catalog: Arc<dyn Catalog> = Arc::new(
-            SqlCatalog::new("sqlite://", "test", object_store.clone())
+            SqlCatalog::new("sqlite://", "test","../iceberg-tests/nyc_taxis", None )
                 .await
                 .unwrap(),
         );
@@ -846,7 +846,7 @@ mod tests {
         let object_store: Arc<dyn ObjectStore> = Arc::new(InMemory::new());
 
         let catalog: Arc<dyn Catalog> = Arc::new(
-            SqlCatalog::new("sqlite://", "test", object_store.clone())
+            SqlCatalog::new("sqlite://", "test","InMemory", None )
                 .await
                 .unwrap(),
         );
@@ -1023,7 +1023,7 @@ mod tests {
         let object_store: Arc<dyn ObjectStore> = Arc::new(InMemory::new());
 
         let catalog: Arc<dyn Catalog> = Arc::new(
-            SqlCatalog::new("sqlite://", "test", object_store.clone())
+            SqlCatalog::new("sqlite://", "test", "InMemory", None)
                 .await
                 .unwrap(),
         );
@@ -1200,7 +1200,7 @@ mod tests {
         let object_store: Arc<dyn ObjectStore> = Arc::new(InMemory::new());
 
         let catalog: Arc<dyn Catalog> = Arc::new(
-            SqlCatalog::new("sqlite://", "iceberg", object_store.clone())
+            SqlCatalog::new("sqlite://", "iceberg", "InMemory", None)
                 .await
                 .unwrap(),
         );
@@ -1384,7 +1384,7 @@ mod tests {
         let object_store: Arc<dyn ObjectStore> = Arc::new(InMemory::new());
 
         let catalog: Arc<dyn Catalog> = Arc::new(
-            SqlCatalog::new("sqlite://", "test", object_store.clone())
+            SqlCatalog::new("sqlite://", "test", "inMemory", None )
                 .await
                 .unwrap(),
         );

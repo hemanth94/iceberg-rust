@@ -738,11 +738,12 @@ pub struct SqlCatalogList {
 impl SqlCatalogList {
     pub async fn new(
         url: &str,
-        object_store: Arc<dyn ObjectStore>,
         location: &str,
         region: Option<&str>,
     ) -> Result<Self, Error> {
         install_default_drivers();
+
+        let object_store: Arc<dyn ObjectStore> = get_object_store(&location, region);
 
         let mut connection =
             AnyConnectOptions::connect(&AnyConnectOptions::from_url(&url.try_into()?)?).await?;
