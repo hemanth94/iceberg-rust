@@ -20,11 +20,11 @@ async-trait = "0.1"
 chrono = { version = "0.4", default-features = false, features = ["serde"] }
 arrow = "51.0.0"
 arrow-schema = "51.0.0"
-datafusion = { git = "https://github.com/dhruvils414/query-rust", branch = "integration" }
-datafusion-sql = { git = "https://github.com/dhruvils414/query-rust", branch = "integration" }
-datafusion-expr = { git = "https://github.com/dhruvils414/query-rust", branch = "integration" }
-datafusion-common = { git = "https://github.com/dhruvils414/query-rust", branch = "integration" }
-datafusion-proto = { git = "https://github.com/dhruvils414/query-rust", branch = "integration" }
+datafusion = { path = "../datafusion/datafusion/core" }
+datafusion-sql = { path = "../datafusion/datafusion/sql" }
+datafusion-expr = { path = "../datafusion/datafusion/expr" }
+datafusion-common = { path = "../datafusion/datafusion/common" }
+datafusion-proto = { path = "../datafusion/datafusion/proto" }
 parquet = { version = "51.0.0", features = ["async", "object_store"] }
 sqlparser = { version = "0.45.0", features = ["visitor"] }
 thiserror = "1.0"

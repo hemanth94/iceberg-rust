@@ -875,7 +875,6 @@ dependencies = [
 [[package]]
 name = "datafusion"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#974ce15281c1897f85b1fab3d314378eea827d08"
 dependencies = [
  "ahash 0.8.11",
  "arrow",
@@ -926,7 +925,6 @@ dependencies = [
 [[package]]
 name = "datafusion-common"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#974ce15281c1897f85b1fab3d314378eea827d08"
 dependencies = [
  "ahash 0.8.11",
  "arrow",
@@ -946,7 +944,6 @@ dependencies = [
 [[package]]
 name = "datafusion-common-runtime"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#974ce15281c1897f85b1fab3d314378eea827d08"
 dependencies = [
  "tokio",
 ]
@@ -954,7 +951,6 @@ dependencies = [
 [[package]]
 name = "datafusion-execution"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#974ce15281c1897f85b1fab3d314378eea827d08"
 dependencies = [
  "arrow",
  "chrono",
@@ -974,7 +970,6 @@ dependencies = [
 [[package]]
 name = "datafusion-expr"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#974ce15281c1897f85b1fab3d314378eea827d08"
 dependencies = [
  "ahash 0.8.11",
  "arrow",
@@ -991,7 +986,6 @@ dependencies = [
 [[package]]
 name = "datafusion-functions"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#974ce15281c1897f85b1fab3d314378eea827d08"
 dependencies = [
  "arrow",
  "base64 0.22.1",
@@ -1017,7 +1011,6 @@ dependencies = [
 [[package]]
 name = "datafusion-functions-aggregate"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#974ce15281c1897f85b1fab3d314378eea827d08"
 dependencies = [
  "arrow",
  "datafusion-common",
@@ -1032,7 +1025,6 @@ dependencies = [
 [[package]]
 name = "datafusion-functions-array"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#974ce15281c1897f85b1fab3d314378eea827d08"
 dependencies = [
  "arrow",
  "arrow-array",
@@ -1062,7 +1054,6 @@ dependencies = [
 [[package]]
 name = "datafusion-optimizer"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#974ce15281c1897f85b1fab3d314378eea827d08"
 dependencies = [
  "arrow",
  "async-trait",
@@ -1080,7 +1071,6 @@ dependencies = [
 [[package]]
 name = "datafusion-physical-expr"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#974ce15281c1897f85b1fab3d314378eea827d08"
 dependencies = [
  "ahash 0.8.11",
  "arrow",
@@ -1110,7 +1100,6 @@ dependencies = [
 [[package]]
 name = "datafusion-physical-expr-common"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#974ce15281c1897f85b1fab3d314378eea827d08"
 dependencies = [
  "arrow",
  "datafusion-common",
@@ -1120,7 +1109,6 @@ dependencies = [
 [[package]]
 name = "datafusion-physical-plan"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#974ce15281c1897f85b1fab3d314378eea827d08"
 dependencies = [
  "ahash 0.8.11",
  "arrow",
@@ -1153,7 +1141,6 @@ dependencies = [
 [[package]]
 name = "datafusion-proto"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#974ce15281c1897f85b1fab3d314378eea827d08"
 dependencies = [
  "arrow",
  "chrono",
@@ -1169,7 +1156,6 @@ dependencies = [
 [[package]]
 name = "datafusion-sql"
 version = "38.0.0"
-source = "git+https://github.com/dhruvils414/query-rust?branch=integration#974ce15281c1897f85b1fab3d314378eea827d08"
 dependencies = [
  "arrow",
  "arrow-array",
