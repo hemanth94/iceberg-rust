@@ -57,6 +57,7 @@ impl LogicalExtensionCodec for IcebergExtensionCodec {
     }
 
     fn try_encode(&self, node: &Extension, buf: &mut Vec<u8>) -> datafusion::error::Result<()> {
+        println!("Reached try_encode");
         todo!()
     }
 
@@ -84,6 +85,7 @@ impl LogicalExtensionCodec for IcebergExtensionCodec {
         let table = tokio::task::block_in_place(|| {
             // Block on the async read call
             let identifier = Identifier::parse(&msg.identifier).unwrap();
+            println!("Table name loaded in decode function {}", identifier.clone().name());
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async { catalog.load_tabular(&identifier).await })
         });
@@ -100,6 +102,12 @@ impl LogicalExtensionCodec for IcebergExtensionCodec {
 
         let table_provider_arc: Arc<dyn TableProvider> = Arc::new(table_provider);
 
+        // ctx.register_table("dhruvil10", table_provider_arc.clone())
+        // .unwrap();
+
+        // // assert table exists
+        println!("Checking if dhruvil10 has been added . {}", ctx.table_exist("dhruvil10").unwrap());
+
         Ok(table_provider_arc)
     }
 
@@ -110,15 +118,15 @@ impl LogicalExtensionCodec for IcebergExtensionCodec {
     ) -> datafusion::error::Result<()> {
         let table = node.as_any().downcast_ref::<Arc<RwLock<Tabular>>>();
 
-        let read_lock = tokio::task::block_in_place(|| {
+        let table_lock = tokio::task::block_in_place(|| {
             // Block on the async read call
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(table.expect("REASON").read())
         });
 
-        let identifier = read_lock.identifier();
+        let identifier = table_lock.identifier();
 
-        let binding = read_lock.catalog();
+        let binding = table_lock.catalog();
         let location = binding.location();
         let region = binding.region();
         let url = binding.database_url();
