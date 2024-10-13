@@ -34,6 +34,7 @@ use sqlx::{
     AnyConnection, ConnectOptions, Connection, Row,
 };
 use uuid::Uuid;
+use datafusion::error::Result as DataFusionResult;
 
 use crate::error::Error;
 use std::any::Any;
@@ -60,7 +61,11 @@ impl SqlCatalog {
     ) -> Result<Self, Error> {
         install_default_drivers();
 
-        let object_store: Arc<dyn ObjectStore> = get_object_store(&location, region);
+
+
+        let object_store = get_object_store(location, region);
+
+
 
         let mut connection =
             AnyConnectOptions::connect(&AnyConnectOptions::from_url(&url.try_into()?)?).await?;
@@ -516,6 +521,8 @@ impl Catalog for SqlCatalog {
                 }
                 apply_table_updates(&mut metadata, commit.updates)?;
                 let metadata_location = new_metadata_location((&metadata).into());
+
+
                 self.object_store
                     .put(
                         &strip_prefix(&metadata_location).into(),
@@ -736,14 +743,10 @@ pub struct SqlCatalogList {
 }
 
 impl SqlCatalogList {
-    pub async fn new(
-        url: &str,
-        location: &str,
-        region: Option<&str>,
-    ) -> Result<Self, Error> {
+    pub async fn new(url: &str, location: &str, region: Option<&str>) -> Result<Self, Error> {
         install_default_drivers();
 
-        let object_store: Arc<dyn ObjectStore> = get_object_store(&location, region);
+        let object_store = get_object_store(location, region);
 
         let mut connection =
             AnyConnectOptions::connect(&AnyConnectOptions::from_url(&url.try_into()?)?).await?;

@@ -179,7 +179,6 @@ impl TableProvider for DataFusionTable {
         filters: &[Expr],
         limit: Option<usize>,
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
-
         let table_state = self.tabular.read().await;
 
         match table_state.deref() {
@@ -357,14 +356,11 @@ async fn table_scan(
     println!("{}", result);
 
     // Create a unique URI for this particular object store
-    let object_store_url = ObjectStoreUrl::parse(
-       &result
-    )?;
+    let object_store_url = ObjectStoreUrl::parse(&result)?;
 
     session
         .runtime_env()
         .register_object_store(object_store_url.as_ref(), table.object_store());
-
 
     // All files have to be grouped according to their partition values. This is done by using a HashMap with the partition values as the key.
     // This way data files with the same partition value are mapped to the same vector.
@@ -556,8 +552,6 @@ async fn table_scan(
                     .entry(file.partition_values.clone())
                     .or_default()
                     .push(file);
-
-
             }
         });
     };
@@ -787,7 +781,7 @@ mod tests {
             Arc::new(LocalFileSystem::new_with_prefix("../iceberg-tests/nyc_taxis").unwrap());
 
         let catalog: Arc<dyn Catalog> = Arc::new(
-            SqlCatalog::new("sqlite://", "test","../iceberg-tests/nyc_taxis", None )
+            SqlCatalog::new("sqlite://", "test", "../iceberg-tests/nyc_taxis", None)
                 .await
                 .unwrap(),
         );
@@ -846,7 +840,7 @@ mod tests {
         let object_store: Arc<dyn ObjectStore> = Arc::new(InMemory::new());
 
         let catalog: Arc<dyn Catalog> = Arc::new(
-            SqlCatalog::new("sqlite://", "test","InMemory", None )
+            SqlCatalog::new("sqlite://", "test", "InMemory", None)
                 .await
                 .unwrap(),
         );
@@ -1384,7 +1378,7 @@ mod tests {
         let object_store: Arc<dyn ObjectStore> = Arc::new(InMemory::new());
 
         let catalog: Arc<dyn Catalog> = Arc::new(
-            SqlCatalog::new("sqlite://", "test", "inMemory", None )
+            SqlCatalog::new("sqlite://", "test", "inMemory", None)
                 .await
                 .unwrap(),
         );

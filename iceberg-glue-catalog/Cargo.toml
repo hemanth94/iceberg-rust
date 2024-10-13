@@ -1,28 +1,31 @@
 [package]
-name = "iceberg-sql-catalog"
+name = "iceberg-glue-catalog"
 version = "0.3.0"
 edition = "2021"
 
-description = "Sql catalog for Apache Iceberg tables"
+description = "Glue catalog for Apache Iceberg tables"
 
 license = "Apache-2.0"
 
 repository = "https://github.com/JanKaul/iceberg-rust"
 
 [dependencies]
+aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
+aws-sdk-glue = "1.65.0"  # Check for the latest version
 async-trait.workspace = true
 dashmap = "5.5.3"
 futures.workspace = true
 iceberg-rust = { path = "../iceberg-rust", version = "0.3.0" }
 object_store.workspace = true
 serde_json.workspace = true
-sqlx = { version = "0.7.4", features = ["tls-rustls", "any", "sqlite", "postgres", "mysql"], default-features = false }
 thiserror.workspace = true
 url.workspace = true
 uuid = { version = "1.7.0", features = ["v4"] }
 datafusion = { workspace = true }
 datafusion-expr = { workspace = true }
+derive_builder = "0.20.2"
+aws-types = "1.3.3"
+bytes = "1.7.1"
 
 [dev-dependencies]
 tokio = "1"
-sqlx = { version = "0.7.4", features = ["runtime-tokio", "tls-rustls", "any", "sqlite", "postgres", "mysql"], default-features = false }

@@ -185,7 +185,7 @@ impl fmt::Display for PrimitiveType {
 pub struct StructType {
     /// Struct fields
     #[builder(setter(each(name = "with_struct_field")))]
-    fields: Vec<StructField>,
+    pub fields: Vec<StructField>,
     /// Lookup for index by field id
     #[serde(skip_serializing)]
     #[builder(
