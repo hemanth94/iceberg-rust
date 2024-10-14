@@ -148,11 +148,74 @@ impl Catalog for GlueCatalog {
     }
 
     async fn list_tabulars(&self, namespace: &Namespace) -> Result<Vec<Identifier>, IcebergError> {
-        todo!()
+        let database =  namespace.to_string();
+
+        let mut table_list: Vec<Identifier> = Vec::new();
+        let mut next_token: Option<String> = None;
+
+        loop {
+            let builder = match &next_token {
+                Some(token) => self
+                    .client
+                    .0
+                    .get_tables()
+                    .database_name(&database)
+                    .next_token(token),
+                None => self.client.0.get_tables().database_name(&database),
+            };
+            //let builder = with_catalog_id!(builder, self.config);
+            let resp = builder.send().await.map_err(|_| IcebergError::InvalidFormat(format!("Error ")))?;
+
+            let tables: Vec<Identifier> = resp
+                .table_list()
+                .iter()
+                .map(|tbl| Identifier::try_new(&[database.clone(), tbl.name().to_string()])) // Result<Identifier, Error>
+                .collect::<Result<Vec<Identifier>, iceberg_rust::error::Error>>()?; // Collect into Result<Vec<Identifier>, Error>
+
+            table_list.extend(tables);
+
+            next_token = resp.next_token().map(ToOwned::to_owned);
+            if next_token.is_none() {
+                break;
+            }
+        }
+
+        Ok(table_list)
+
+
     }
 
     async fn list_namespaces(&self, parent: Option<&str>) -> Result<Vec<Namespace>, IcebergError> {
-        todo!()
+
+        let mut database_list: Vec<Namespace> = Vec::new();
+        let mut next_token: Option<String> = None;
+
+        loop {
+            let builder = match &next_token {
+                Some(token) => self.client.0.get_databases().next_token(token),
+                None => self.client.0.get_databases(),
+            };
+
+            let resp = builder.send().await.map_err(|_| IcebergError::InvalidFormat(format!("Error ")))?;
+
+            let dbs: Vec<Namespace> = resp
+                .database_list()
+                .iter()
+                .map(|db| Namespace::try_new(&[db.name().to_string()]).unwrap())
+                .collect();
+
+            database_list.extend(dbs);
+
+            next_token = resp.next_token().map(ToOwned::to_owned);
+
+            println!("{:?}", database_list);
+
+            if next_token.is_none() {
+                break Ok(database_list);
+            }
+        }
+
+
     }
 
     async fn tabular_exists(&self, identifier: &Identifier) -> Result<bool, IcebergError> {
