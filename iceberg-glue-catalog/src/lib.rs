@@ -208,8 +208,6 @@ impl Catalog for GlueCatalog {
 
             next_token = resp.next_token().map(ToOwned::to_owned);
 
-            println!("{:?}", database_list);
-
             if next_token.is_none() {
                 break Ok(database_list);
             }
