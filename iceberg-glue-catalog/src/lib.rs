@@ -283,7 +283,6 @@ impl Catalog for GlueCatalog {
         /*
       TO-DO
       --> Branch
-
        */
         let schema = metadata.current_schema(None);
         let bucket = parse_bucket(&self.config.warehouse)?;
@@ -307,14 +306,12 @@ impl Catalog for GlueCatalog {
 
         let bucket_metadata_location = format!("{}{}", bucket, metadata_location);
 
-
         self.object_store
             .put(
                 &strip_prefix(&metadata_location).into(),
                 metadata_json.into(),
             )
             .await?;
-
 
         // Create a Glue schema using the builder
         let mut builder = GlueSchemaBuilder::new(true);

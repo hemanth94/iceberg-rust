@@ -20,11 +20,11 @@ async-trait = "0.1"
 chrono = { version = "0.4", default-features = false, features = ["serde"] }
 arrow = "51.0.0"
 arrow-schema = "51.0.0"
-datafusion = { path = "/Users/dhruvilshah/Documents/learning/rust/query-rust/datafusion/core" }
-datafusion-sql = { path = "/Users/dhruvilshah/Documents/learning/rust/query-rust/datafusion/sql" }
-datafusion-expr = { path = "/Users/dhruvilshah/Documents/learning/rust/query-rust/datafusion/expr" }
-datafusion-common = { path = "/Users/dhruvilshah/Documents/learning/rust/query-rust/datafusion/common" }
-datafusion-proto = { path = "/Users/dhruvilshah/Documents/learning/rust/query-rust/datafusion/proto" }
+datafusion = {git = "https://github.com/dhruvils414/query-rust", branch = "ballista_setup"}
+datafusion-sql =  {git = "https://github.com/dhruvils414/query-rust", branch = "ballista_setup"}
+datafusion-expr =  {git = "https://github.com/dhruvils414/query-rust", branch = "ballista_setup"}
+datafusion-common =  {git = "https://github.com/dhruvils414/query-rust", branch = "ballista_setup"}
+datafusion-proto =  {git = "https://github.com/dhruvils414/query-rust", branch = "ballista_setup"}
 parquet = { version = "51.0.0", features = ["async", "object_store"] }
 sqlparser = { version = "0.45.0", features = ["visitor"] }
 thiserror = "1.0"

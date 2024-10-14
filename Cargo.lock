@@ -1265,17 +1265,68 @@ dependencies = [
  "bzip2",
  "chrono",
  "dashmap",
- "datafusion-common",
- "datafusion-common-runtime",
- "datafusion-execution",
- "datafusion-expr",
- "datafusion-functions",
- "datafusion-functions-aggregate",
- "datafusion-functions-array",
- "datafusion-optimizer",
- "datafusion-physical-expr",
- "datafusion-physical-plan",
- "datafusion-sql",
+ "datafusion-common 38.0.0",
+ "datafusion-common-runtime 38.0.0",
+ "datafusion-execution 38.0.0",
+ "datafusion-expr 38.0.0",
+ "datafusion-functions 38.0.0",
+ "datafusion-functions-aggregate 38.0.0",
+ "datafusion-functions-array 38.0.0",
+ "datafusion-optimizer 38.0.0",
+ "datafusion-physical-expr 38.0.0",
+ "datafusion-physical-plan 38.0.0",
+ "datafusion-sql 38.0.0",
+ "flate2",
+ "futures",
+ "glob",
+ "half",
+ "hashbrown 0.14.5",
+ "indexmap",
+ "itertools 0.12.1",
+ "log",
+ "num_cpus",
+ "object_store",
+ "parking_lot",
+ "parquet",
+ "pin-project-lite",
+ "rand",
+ "sqlparser",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "url",
+ "uuid",
+ "xz2",
+ "zstd",
+]
+
+[[package]]
+name = "datafusion"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=ballista_setup#28430c839278b4a7bc7fb6f16792e42f373f5116"
+dependencies = [
+ "ahash 0.8.11",
+ "arrow",
+ "arrow-array",
+ "arrow-ipc",
+ "arrow-schema",
+ "async-compression",
+ "async-trait",
+ "bytes",
+ "bzip2",
+ "chrono",
+ "dashmap",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-common-runtime 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-execution 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-functions 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-functions-aggregate 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-functions-array 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-optimizer 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-physical-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-physical-plan 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-sql 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
  "flate2",
  "futures",
  "glob",
@@ -1320,8 +1371,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "datafusion-common"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=ballista_setup#28430c839278b4a7bc7fb6f16792e42f373f5116"
+dependencies = [
+ "ahash 0.8.11",
+ "arrow",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-schema",
+ "chrono",
+ "half",
+ "instant",
+ "libc",
+ "num_cpus",
+ "object_store",
+ "parquet",
+ "sqlparser",
+]
+
+[[package]]
 name = "datafusion-common-runtime"
 version = "38.0.0"
+dependencies = [
+ "tokio",
+]
+
+[[package]]
+name = "datafusion-common-runtime"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=ballista_setup#28430c839278b4a7bc7fb6f16792e42f373f5116"
 dependencies = [
  "tokio",
 ]
@@ -1333,8 +1412,28 @@ dependencies = [
  "arrow",
  "chrono",
  "dashmap",
- "datafusion-common",
- "datafusion-expr",
+ "datafusion-common 38.0.0",
+ "datafusion-expr 38.0.0",
+ "futures",
+ "hashbrown 0.14.5",
+ "log",
+ "object_store",
+ "parking_lot",
+ "rand",
+ "tempfile",
+ "url",
+]
+
+[[package]]
+name = "datafusion-execution"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=ballista_setup#28430c839278b4a7bc7fb6f16792e42f373f5116"
+dependencies = [
+ "arrow",
+ "chrono",
+ "dashmap",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
  "futures",
  "hashbrown 0.14.5",
  "log",
@@ -1353,7 +1452,24 @@ dependencies = [
  "arrow",
  "arrow-array",
  "chrono",
- "datafusion-common",
+ "datafusion-common 38.0.0",
+ "paste",
+ "serde_json",
+ "sqlparser",
+ "strum 0.26.3",
+ "strum_macros 0.26.4",
+]
+
+[[package]]
+name = "datafusion-expr"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=ballista_setup#28430c839278b4a7bc7fb6f16792e42f373f5116"
+dependencies = [
+ "ahash 0.8.11",
+ "arrow",
+ "arrow-array",
+ "chrono",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
  "paste",
  "serde_json",
  "sqlparser",
@@ -1370,10 +1486,36 @@ dependencies = [
  "blake2",
  "blake3",
  "chrono",
- "datafusion-common",
- "datafusion-execution",
- "datafusion-expr",
- "datafusion-physical-expr",
+ "datafusion-common 38.0.0",
+ "datafusion-execution 38.0.0",
+ "datafusion-expr 38.0.0",
+ "datafusion-physical-expr 38.0.0",
+ "hashbrown 0.14.5",
+ "hex",
+ "itertools 0.12.1",
+ "log",
+ "md-5",
+ "rand",
+ "regex",
+ "sha2",
+ "unicode-segmentation",
+ "uuid",
+]
+
+[[package]]
+name = "datafusion-functions"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=ballista_setup#28430c839278b4a7bc7fb6f16792e42f373f5116"
+dependencies = [
+ "arrow",
+ "base64 0.22.1",
+ "blake2",
+ "blake3",
+ "chrono",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-execution 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-physical-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
  "hashbrown 0.14.5",
  "hex",
  "itertools 0.12.1",
@@ -1391,10 +1533,25 @@ name = "datafusion-functions-aggregate"
 version = "38.0.0"
 dependencies = [
  "arrow",
- "datafusion-common",
- "datafusion-execution",
- "datafusion-expr",
- "datafusion-physical-expr-common",
+ "datafusion-common 38.0.0",
+ "datafusion-execution 38.0.0",
+ "datafusion-expr 38.0.0",
+ "datafusion-physical-expr-common 38.0.0",
+ "log",
+ "paste",
+ "sqlparser",
+]
+
+[[package]]
+name = "datafusion-functions-aggregate"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=ballista_setup#28430c839278b4a7bc7fb6f16792e42f373f5116"
+dependencies = [
+ "arrow",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-execution 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-physical-expr-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
  "log",
  "paste",
  "sqlparser",
@@ -1409,10 +1566,29 @@ dependencies = [
  "arrow-buffer",
  "arrow-ord",
  "arrow-schema",
- "datafusion-common",
- "datafusion-execution",
- "datafusion-expr",
- "datafusion-functions",
+ "datafusion-common 38.0.0",
+ "datafusion-execution 38.0.0",
+ "datafusion-expr 38.0.0",
+ "datafusion-functions 38.0.0",
+ "itertools 0.12.1",
+ "log",
+ "paste",
+]
+
+[[package]]
+name = "datafusion-functions-array"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=ballista_setup#28430c839278b4a7bc7fb6f16792e42f373f5116"
+dependencies = [
+ "arrow",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-ord",
+ "arrow-schema",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-execution 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-functions 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
  "itertools 0.12.1",
  "log",
  "paste",
@@ -1423,9 +1599,9 @@ name = "datafusion-iceberg-sql"
 version = "0.3.0"
 dependencies = [
  "arrow-schema",
- "datafusion-common",
- "datafusion-expr",
- "datafusion-sql",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-sql 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
  "iceberg-rust",
 ]
 
@@ -1436,9 +1612,27 @@ dependencies = [
  "arrow",
  "async-trait",
  "chrono",
- "datafusion-common",
- "datafusion-expr",
- "datafusion-physical-expr",
+ "datafusion-common 38.0.0",
+ "datafusion-expr 38.0.0",
+ "datafusion-physical-expr 38.0.0",
+ "hashbrown 0.14.5",
+ "indexmap",
+ "itertools 0.12.1",
+ "log",
+ "regex-syntax",
+]
+
+[[package]]
+name = "datafusion-optimizer"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=ballista_setup#28430c839278b4a7bc7fb6f16792e42f373f5116"
+dependencies = [
+ "arrow",
+ "async-trait",
+ "chrono",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-physical-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
  "hashbrown 0.14.5",
  "indexmap",
  "itertools 0.12.1",
@@ -1459,11 +1653,41 @@ dependencies = [
  "arrow-string",
  "base64 0.22.1",
  "chrono",
- "datafusion-common",
- "datafusion-execution",
- "datafusion-expr",
- "datafusion-functions-aggregate",
- "datafusion-physical-expr-common",
+ "datafusion-common 38.0.0",
+ "datafusion-execution 38.0.0",
+ "datafusion-expr 38.0.0",
+ "datafusion-functions-aggregate 38.0.0",
+ "datafusion-physical-expr-common 38.0.0",
+ "half",
+ "hashbrown 0.14.5",
+ "hex",
+ "indexmap",
+ "itertools 0.12.1",
+ "log",
+ "paste",
+ "petgraph",
+ "regex",
+]
+
+[[package]]
+name = "datafusion-physical-expr"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=ballista_setup#28430c839278b4a7bc7fb6f16792e42f373f5116"
+dependencies = [
+ "ahash 0.8.11",
+ "arrow",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-ord",
+ "arrow-schema",
+ "arrow-string",
+ "base64 0.22.1",
+ "chrono",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-execution 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-functions-aggregate 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-physical-expr-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
  "half",
  "hashbrown 0.14.5",
  "hex",
@@ -1480,8 +1704,18 @@ name = "datafusion-physical-expr-common"
 version = "38.0.0"
 dependencies = [
  "arrow",
- "datafusion-common",
- "datafusion-expr",
+ "datafusion-common 38.0.0",
+ "datafusion-expr 38.0.0",
+]
+
+[[package]]
+name = "datafusion-physical-expr-common"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=ballista_setup#28430c839278b4a7bc7fb6f16792e42f373f5116"
+dependencies = [
+ "arrow",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
 ]
 
 [[package]]
@@ -1496,13 +1730,46 @@ dependencies = [
  "arrow-schema",
  "async-trait",
  "chrono",
- "datafusion-common",
- "datafusion-common-runtime",
- "datafusion-execution",
- "datafusion-expr",
- "datafusion-functions-aggregate",
- "datafusion-physical-expr",
- "datafusion-physical-expr-common",
+ "datafusion-common 38.0.0",
+ "datafusion-common-runtime 38.0.0",
+ "datafusion-execution 38.0.0",
+ "datafusion-expr 38.0.0",
+ "datafusion-functions-aggregate 38.0.0",
+ "datafusion-physical-expr 38.0.0",
+ "datafusion-physical-expr-common 38.0.0",
+ "futures",
+ "half",
+ "hashbrown 0.14.5",
+ "indexmap",
+ "itertools 0.12.1",
+ "log",
+ "once_cell",
+ "parking_lot",
+ "pin-project-lite",
+ "rand",
+ "tokio",
+]
+
+[[package]]
+name = "datafusion-physical-plan"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=ballista_setup#28430c839278b4a7bc7fb6f16792e42f373f5116"
+dependencies = [
+ "ahash 0.8.11",
+ "arrow",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-ord",
+ "arrow-schema",
+ "async-trait",
+ "chrono",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-common-runtime 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-execution 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-functions-aggregate 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-physical-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-physical-expr-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
  "futures",
  "half",
  "hashbrown 0.14.5",
@@ -1519,12 +1786,13 @@ dependencies = [
 [[package]]
 name = "datafusion-proto"
 version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=ballista_setup#28430c839278b4a7bc7fb6f16792e42f373f5116"
 dependencies = [
  "arrow",
  "chrono",
- "datafusion",
- "datafusion-common",
- "datafusion-expr",
+ "datafusion 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
  "lazy_static",
  "object_store",
  "prost",
@@ -1538,8 +1806,23 @@ dependencies = [
  "arrow",
  "arrow-array",
  "arrow-schema",
- "datafusion-common",
- "datafusion-expr",
+ "datafusion-common 38.0.0",
+ "datafusion-expr 38.0.0",
+ "log",
+ "sqlparser",
+ "strum 0.26.3",
+]
+
+[[package]]
+name = "datafusion-sql"
+version = "38.0.0"
+source = "git+https://github.com/dhruvils414/query-rust?branch=ballista_setup#28430c839278b4a7bc7fb6f16792e42f373f5116"
+dependencies = [
+ "arrow",
+ "arrow-array",
+ "arrow-schema",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
  "log",
  "sqlparser",
  "strum 0.26.3",
@@ -1552,9 +1835,9 @@ dependencies = [
  "async-trait",
  "chrono",
  "dashmap",
- "datafusion",
- "datafusion-common",
- "datafusion-expr",
+ "datafusion 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-common 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
  "datafusion-proto",
  "futures",
  "iceberg-rust",
@@ -2228,8 +2511,8 @@ dependencies = [
  "aws-types",
  "bytes",
  "dashmap",
- "datafusion",
- "datafusion-expr",
+ "datafusion 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
  "derive_builder 0.20.2",
  "futures",
  "iceberg-rust",
@@ -2248,8 +2531,8 @@ dependencies = [
  "apache-avro",
  "arrow",
  "async-trait",
- "datafusion",
- "datafusion-expr",
+ "datafusion 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
  "derive_builder 0.12.0",
  "dirs",
  "dotenv",
@@ -2301,8 +2584,8 @@ version = "0.3.0"
 dependencies = [
  "async-trait",
  "dashmap",
- "datafusion",
- "datafusion-expr",
+ "datafusion 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
+ "datafusion-expr 38.0.0 (git+https://github.com/dhruvils414/query-rust?branch=ballista_setup)",
  "futures",
  "iceberg-rust",
  "object_store",
@@ -3082,7 +3365,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81bddcdb20abf9501610992b6759a4c888aef7d1a7247ef75e2404275ac24af1"
 dependencies = [
  "anyhow",
- "itertools 0.12.1",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn 2.0.79",
@@ -3490,7 +3773,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 name = "scratch-bin-files"
 version = "0.1.0"
 dependencies = [
- "datafusion",
+ "datafusion 38.0.0",
  "datafusion-iceberg-sql",
  "datafusion_iceberg",
  "iceberg-rust",
