@@ -3,11 +3,7 @@ mod schema;
 mod utils;
 
 use async_trait::async_trait;
-use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_glue::config::ProvideCredentials;
-use aws_sdk_glue::types::{
-    Crawler, CrawlerState, CrawlerTargets, DatabaseInput, Job, JobCommand, S3Target,
-};
 use aws_sdk_glue::Client;
 use aws_types::region::Region;
 use derive_builder::Builder;
@@ -15,8 +11,9 @@ use object_store;
 use std::any::Any;
 use std::collections::HashMap;
 use std::error::Error;
-use std::sync::Arc;
 use std::{env, fs};
+use std::path::PathBuf;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::schema::GlueSchemaBuilder;
@@ -54,6 +51,7 @@ use iceberg_rust::util::strip_prefix;
 
 
 use aws_sdk_glue::types::{Database, StorageDescriptor, TableInput};
+use aws_types::SdkConfig;
 
 
 use object_store::ObjectStore;
@@ -81,6 +79,8 @@ pub struct GlueCatalog {
     client: GlueClient,
     object_store: Arc<dyn ObjectStore>,
 }
+
+
 impl  GlueCatalog {
     pub async fn new(glueconfig: GlueCatalogConfig) -> Result<Self, Box<dyn Error>> {
         let region = glueconfig

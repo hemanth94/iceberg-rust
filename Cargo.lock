@@ -2245,6 +2245,7 @@ dependencies = [
  "datafusion",
  "datafusion-expr",
  "derive_builder 0.20.2",
+ "dirs",
  "futures",
  "iceberg-rust",
  "object_store",
