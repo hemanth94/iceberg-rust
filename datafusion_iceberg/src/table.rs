@@ -515,7 +515,6 @@ async fn table_scan(
             .await
             .map_err(Into::<Error>::into)?;
 
-        println!("data file {:?}", data_files);
         data_files.into_iter().for_each(|manifest| {
             //eprintln!("Manifest Status: {:?}", manifest.status());
             if *manifest.status() != Status::Deleted {
@@ -624,8 +623,6 @@ async fn table_scan(
         table_partition_cols,
         output_ordering: vec![],
     };
-
-    println!("ParquetFormat");
 
     ParquetFormat::default()
         .create_physical_plan(session, file_scan_config, physical_predicate.as_ref())

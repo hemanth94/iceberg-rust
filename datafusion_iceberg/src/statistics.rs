@@ -34,7 +34,6 @@ pub(crate) async fn table_statistics(
     table: &Table,
     snapshot_range: &(Option<i64>, Option<i64>),
 ) -> Result<Statistics, Error> {
-    eprintln!("Inside table statistics function");
     let schema = snapshot_range
         .1
         .and_then(|snapshot_id| table.metadata().schema(snapshot_id).ok().cloned())
