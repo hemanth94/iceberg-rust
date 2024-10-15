@@ -17,59 +17,58 @@ fn get_aws_credentials() -> Result<Option<(String, String)>, String> {
             Err(_) => false,
         }
     }
-
-    return Ok(None);
     /*
 
-    // Check if running on ECS
-    fn is_ecs() -> bool {
-        env::var("ECS_CONTAINER_METADATA_URI").is_ok()
-    }
+   return Ok(None);
+   */
 
-    // If credentials are passed explicitly
-    if let (Ok(access_key), Ok(secret_key)) = (env::var("AWS_ACCESS_KEY_ID"), env::var("AWS_SECRET_ACCESS_KEY")) {
-        return Ok(Some((access_key, secret_key)));
-    }
+   // Check if running on ECS
+   fn is_ecs() -> bool {
+       env::var("ECS_CONTAINER_METADATA_URI").is_ok()
+   }
 
-    // If running on EC2 or ECS, credentials should be handled by environment variables or IAM roles
-    if is_ec2() || is_ecs() {
-        println!("Using instance IAM role or environment variables for credentials.");
-        return Ok(None); // No credentials to return, SDK will use default method
-    }
+   // If credentials are passed explicitly
+   if let (Ok(access_key), Ok(secret_key)) = (env::var("AWS_ACCESS_KEY_ID"), env::var("AWS_SECRET_ACCESS_KEY")) {
+       return Ok(Some((access_key, secret_key)));
+   }
 
-    // Otherwise, read from the config file (local setup)
-    let config_file_path = dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")).join(".aws/credentials");
-    if config_file_path.exists() {
-        let contents = fs::read_to_string(config_file_path).expect("Unable to read config file");
-        let mut in_default_profile = false;
-        let mut access_key = None;
-        let mut secret_key = None;
+   // If running on EC2 or ECS, credentials should be handled by environment variables or IAM roles
+   if is_ec2() || is_ecs() {
+       println!("Using instance IAM role or environment variables for credentials.");
+       return Ok(None); // No credentials to return, SDK will use default method
+   }
 
-        for line in contents.lines() {
-            if line.starts_with('[') && line.ends_with(']') {
-                if line == "[default]" {
-                    in_default_profile = true;
-                } else {
-                    in_default_profile = false;
-                }
-            } else if in_default_profile {
-                if line.starts_with("aws_access_key_id") {
-                    access_key = Some(line.split('=').nth(1).unwrap().trim().to_string());
-                } else if line.starts_with("aws_secret_access_key") {
-                    secret_key = Some(line.split('=').nth(1).unwrap().trim().to_string());
-                }
-            }
-        }
+   // Otherwise, read from the config file (local setup)
+   let config_file_path = dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")).join(".aws/credentials");
+   if config_file_path.exists() {
+       let contents = fs::read_to_string(config_file_path).expect("Unable to read config file");
+       let mut in_default_profile = false;
+       let mut access_key = None;
+       let mut secret_key = None;
 
-        if let (Some(key), Some(secret)) = (access_key, secret_key) {
-            return Ok(Some((key, secret)));
-        }
-        println!("AWS credentials not found in the default profile.");
-    }
+       for line in contents.lines() {
+           if line.starts_with('[') && line.ends_with(']') {
+               if line == "[default]" {
+                   in_default_profile = true;
+               } else {
+                   in_default_profile = false;
+               }
+           } else if in_default_profile {
+               if line.starts_with("aws_access_key_id") {
+                   access_key = Some(line.split('=').nth(1).unwrap().trim().to_string());
+               } else if line.starts_with("aws_secret_access_key") {
+                   secret_key = Some(line.split('=').nth(1).unwrap().trim().to_string());
+               }
+           }
+       }
 
-    Err("No valid AWS credentials found in environment or config file.".to_string())
+       if let (Some(key), Some(secret)) = (access_key, secret_key) {
+           return Ok(Some((key, secret)));
+       }
+       println!("AWS credentials not found in the default profile.");
+   }
 
-     */
+   Err("No valid AWS credentials found in environment or config file.".to_string())
 }
 
 pub fn get_object_store(url: &str, region: Option<&str>) -> Arc<dyn ObjectStore> {

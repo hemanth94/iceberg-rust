@@ -11,13 +11,11 @@ use object_store;
 use std::any::Any;
 use std::collections::HashMap;
 use std::error::Error;
-use std::{env, fs};
-use std::path::PathBuf;
 use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::schema::GlueSchemaBuilder;
-use crate::utils::{EXTERNAL_TABLE,TABLE_TYPE,ICEBERG,METADATA_LOCATION, PREV_METADATA_LOCATION,get_metadata_location, get_location_from_update};
+use crate::utils::{EXTERNAL_TABLE,TABLE_TYPE,ICEBERG,METADATA_LOCATION, PREV_METADATA_LOCATION,get_metadata_location};
 
 
 use iceberg_rust::{
@@ -25,19 +23,18 @@ use iceberg_rust::{
     catalog::{
         bucket::{parse_bucket,Bucket},
         commit::{
-            apply_table_updates, apply_view_updates, check_table_requirements,
-            check_view_requirements, CommitTable, CommitView, TableRequirement,
+            apply_table_updates, check_table_requirements, CommitTable, CommitView,
         },
         identifier::Identifier,
         namespace::Namespace,
         tabular::Tabular,
-        Catalog, CatalogList,
+        Catalog,
     },
     error::Error as IcebergError,
     materialized_view::MaterializedView,
     spec::{
         materialized_view_metadata::MaterializedViewMetadata,
-        table_metadata::{new_metadata_location, TableMetadata},
+        table_metadata::TableMetadata,
         tabular::TabularMetadata,
         view_metadata::ViewMetadata,
     },
@@ -50,8 +47,7 @@ use iceberg_rust::util::strip_prefix;
 
 
 
-use aws_sdk_glue::types::{Database, StorageDescriptor, TableInput};
-use aws_types::SdkConfig;
+use aws_sdk_glue::types::{StorageDescriptor, TableInput};
 
 
 use object_store::ObjectStore;

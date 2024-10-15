@@ -34,7 +34,6 @@ use sqlx::{
     AnyConnection, ConnectOptions, Connection, Row,
 };
 use uuid::Uuid;
-use datafusion::error::Result as DataFusionResult;
 
 use crate::error::Error;
 use std::any::Any;
