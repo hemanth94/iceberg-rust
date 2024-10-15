@@ -32,4 +32,5 @@ iceberg-rust-spec = { path = "../iceberg-rust-spec", version = "0.3.0" }
 datafusion = { workspace = true }
 datafusion-expr = { workspace = true }
 dotenv = "0.15.0"
+aws-sdk-ec2 = "1.78.0"
 dirs = { version = "5.0.1", features = [] }

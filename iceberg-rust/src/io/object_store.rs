@@ -23,7 +23,8 @@ fn get_aws_credentials() -> Result<Option<(String, String)>, String> {
         }
     }
 
-    println!("{:?}",is_ec2());
+    return Ok(None);
+    /*
 
     // Check if running on ECS
     fn is_ecs() -> bool {
@@ -72,6 +73,8 @@ fn get_aws_credentials() -> Result<Option<(String, String)>, String> {
     }
 
     Err("No valid AWS credentials found in environment or config file.".to_string())
+
+     */
 }
 
 pub fn get_object_store(url: &str, region: Option<&str>) -> Arc<dyn ObjectStore> {

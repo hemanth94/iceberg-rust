@@ -95,7 +95,7 @@ impl  GlueCatalog {
             .to_string();
 
         let config = aws_config::from_env()
-            //.profile_name(profile_name) // Set the profile here
+            .profile_name(profile_name) // Set the profile here
             .region(Region::new(region.clone()))
             .load()
             .await;
