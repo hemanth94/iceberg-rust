@@ -4,7 +4,7 @@ use std::sync::Arc;
 use url::Url;
 use std::{env, fs};
 use dotenv::dotenv;
-
+use std::path::PathBuf;
 
 fn get_aws_credentials() -> Result<Option<(String, String)>, String> {
     dotenv().ok(); // Load environment variables from .env file if present
