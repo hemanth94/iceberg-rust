@@ -2,7 +2,7 @@ use object_store::aws::AmazonS3Builder;
 use object_store::ObjectStore;
 use std::sync::Arc;
 use url::Url;
-use std::{fs};
+use std::{env, fs};
 use dotenv::dotenv;
 
 
