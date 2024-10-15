@@ -1,13 +1,8 @@
 use object_store::aws::AmazonS3Builder;
-use object_store::local::LocalFileSystem;
-use object_store::memory::InMemory;
 use object_store::ObjectStore;
 use std::sync::Arc;
 use url::Url;
-use std::collections::HashMap;
-use std::{env, fs};
-use std::path::PathBuf;
-use datafusion::common::DataFusionError;
+use std::{fs};
 use dotenv::dotenv;
 
 
