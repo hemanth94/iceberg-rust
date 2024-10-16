@@ -19,6 +19,7 @@ impl TryInto<ArrowSchema> for &StructType {
     type Error = Error;
 
     fn try_into(self) -> Result<ArrowSchema, Self::Error> {
+
         let fields = self
             .iter()
             .map(|field| {
@@ -35,6 +36,8 @@ impl TryInto<ArrowSchema> for &StructType {
                 )])))
             })
             .collect::<Result<_, Error>>()?;
+
+        println!("Arrow schema {:?}", fields);
         let metadata = HashMap::new();
         Ok(ArrowSchema { fields, metadata })
     }
