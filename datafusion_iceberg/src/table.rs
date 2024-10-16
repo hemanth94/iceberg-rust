@@ -596,11 +596,17 @@ async fn table_scan(
         .collect::<Result<Vec<_>, DataFusionError>>()
         .map_err(Into::<Error>::into)?;
 
+    println!(" Get all table_partition_cols {:?}", table_partition_cols );
+
     // Add the partition columns to the table schema
     let mut schema_builder = StructType::builder();
     for field in schema.fields().iter() {
+        println!(" Get field {:?}", field );
         schema_builder.with_struct_field(field.clone());
     }
+
+
+
     for partition_field in table.metadata().default_partition_spec().unwrap().fields() {
         schema_builder.with_struct_field(StructField {
             id: *partition_field.field_id(),
