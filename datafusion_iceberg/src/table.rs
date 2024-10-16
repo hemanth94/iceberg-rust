@@ -392,6 +392,8 @@ async fn table_scan(
         })
         .collect::<Result<HashSet<_>, Error>>()?;
 
+    println!("partition_column_names {:?}", partition_column_names);
+
     // If there is a filter expression the manifests to read are pruned based on the pruning statistics available in the manifest_list file.
     let physical_predicate = if let Some(predicate) = conjunction(filters.iter().cloned()) {
         Some(create_physical_expr(
@@ -427,6 +429,8 @@ async fn table_scan(
                 )))
             }
         };
+
+        println!("manifests list {:?}", manifests);
 
         // If there is a filter expression on the partition column, the manifest files to read are pruned.
         let data_files = if let Some(predicate) = partition_predicates {
@@ -464,7 +468,7 @@ async fn table_scan(
         let files_to_prune =
             pruning_predicate.prune(&PruneDataFiles::new(&schema, &arrow_schema, &data_files))?;
 
-        //println!("Reaching");
+        println!("Reaching");
         data_files
             .into_iter()
             .zip(files_to_prune.into_iter())
