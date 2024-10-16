@@ -181,6 +181,9 @@ impl TableProvider for DataFusionTable {
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
         let table_state = self.tabular.read().await;
 
+        println!("in the table scan method");
+
+
         match table_state.deref() {
             Tabular::View(view) => {
                 let metadata = view.metadata();
@@ -200,6 +203,7 @@ impl TableProvider for DataFusionTable {
             }
             Tabular::Table(table) => {
                 let schema = self.schema();
+                println!("in the table scan method schema {:?}",schema );
                 let statistics = self.statistics().await.map_err(Into::<Error>::into)?;
                 table_scan(
                     table,
