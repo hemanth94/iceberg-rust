@@ -155,11 +155,11 @@ mod _serde {
         /// ID of the snapshot where the manifest file was added
         pub added_snapshot_id: i64,
         /// Number of entries in the manifest that have status ADDED (1), when null this is assumed to be non-zero
-        pub added_data_files_count: i32,
+        pub added_files_count: i32,
         /// Number of entries in the manifest that have status EXISTING (0), when null this is assumed to be non-zero
-        pub existing_data_files_count: i32,
+        pub existing_files_count: i32,
         /// Number of entries in the manifest that have status DELETED (2), when null this is assumed to be non-zero
-        pub deleted_data_files_count: i32,
+        pub deleted_files_count: i32,
         /// Number of rows in all of files in the manifest that have status ADDED, when null this is assumed to be non-zero
         pub added_rows_count: i64,
         /// Number of rows in all of files in the manifest that have status EXISTING, when null this is assumed to be non-zero
@@ -185,11 +185,11 @@ mod _serde {
         /// ID of the snapshot where the manifest file was added
         pub added_snapshot_id: i64,
         /// Number of entries in the manifest that have status ADDED (1), when null this is assumed to be non-zero
-        pub added_data_files_count: Option<i32>,
+        pub added_files_count: Option<i32>,
         /// Number of entries in the manifest that have status EXISTING (0), when null this is assumed to be non-zero
-        pub existing_data_files_count: Option<i32>,
+        pub existing_files_count: Option<i32>,
         /// Number of entries in the manifest that have status DELETED (2), when null this is assumed to be non-zero
-        pub deleted_data_files_count: Option<i32>,
+        pub deleted_files_count: Option<i32>,
         /// Number of rows in all of files in the manifest that have status ADDED, when null this is assumed to be non-zero
         pub added_rows_count: Option<i64>,
         /// Number of rows in all of files in the manifest that have status EXISTING, when null this is assumed to be non-zero
@@ -218,9 +218,9 @@ mod _serde {
                 manifest_length: value.manifest_length,
                 partition_spec_id: value.partition_spec_id,
                 added_snapshot_id: value.added_snapshot_id,
-                added_data_files_count: value.added_files_count,
-                existing_data_files_count: value.existing_files_count,
-                deleted_data_files_count: value.deleted_files_count,
+                added_files_count: value.added_files_count,
+                existing_files_count: value.existing_files_count,
+                deleted_files_count: value.deleted_files_count,
                 added_rows_count: value.added_rows_count,
                 existing_rows_count: value.existing_rows_count,
                 deleted_rows_count: value.deleted_rows_count,
@@ -242,9 +242,9 @@ mod _serde {
                 sequence_number: value.sequence_number,
                 min_sequence_number: value.min_sequence_number,
                 added_snapshot_id: value.added_snapshot_id,
-                added_data_files_count: value.added_files_count.unwrap(),
-                existing_data_files_count: value.existing_files_count.unwrap(),
-                deleted_data_files_count: value.deleted_files_count.unwrap(),
+                added_files_count: value.added_files_count.unwrap(),
+                existing_files_count: value.existing_files_count.unwrap(),
+                deleted_files_count: value.deleted_files_count.unwrap(),
                 added_rows_count: value.added_rows_count.unwrap(),
                 existing_rows_count: value.existing_rows_count.unwrap(),
                 deleted_rows_count: value.deleted_rows_count.unwrap(),
@@ -323,9 +323,9 @@ impl ManifestListEntry {
             sequence_number: entry.sequence_number,
             min_sequence_number: entry.min_sequence_number,
             added_snapshot_id: entry.added_snapshot_id,
-            added_files_count: Some(entry.added_data_files_count),
-            existing_files_count: Some(entry.existing_data_files_count),
-            deleted_files_count: Some(entry.deleted_data_files_count),
+            added_files_count: Some(entry.added_files_count),
+            existing_files_count: Some(entry.existing_files_count),
+            deleted_files_count: Some(entry.deleted_files_count),
             added_rows_count: Some(entry.added_rows_count),
             existing_rows_count: Some(entry.existing_rows_count),
             deleted_rows_count: Some(entry.deleted_rows_count),
@@ -367,9 +367,9 @@ impl ManifestListEntry {
             sequence_number: 0,
             min_sequence_number: 0,
             added_snapshot_id: entry.added_snapshot_id,
-            added_files_count: entry.added_data_files_count,
-            existing_files_count: entry.existing_data_files_count,
-            deleted_files_count: entry.deleted_data_files_count,
+            added_files_count: entry.added_files_count,
+            existing_files_count: entry.existing_files_count,
+            deleted_files_count: entry.deleted_files_count,
             added_rows_count: entry.added_rows_count,
             existing_rows_count: entry.existing_rows_count,
             deleted_rows_count: entry.deleted_rows_count,
