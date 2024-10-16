@@ -348,10 +348,13 @@ async fn table_scan(
     filters: &[Expr],
     limit: Option<usize>,
 ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
+    println!("in the table scan method {:?}", arrow_schema);
     let schema = snapshot_range
         .1
         .and_then(|snapshot_id| table.metadata().schema(snapshot_id).ok().cloned())
         .unwrap_or_else(|| table.current_schema(None).unwrap().clone());
+
+    println!("in the table scan method after snapshort range {:?}", schema);
 
     let location: &str = &table.catalog().location().to_owned();
     let region: &str = &table.catalog().region().to_owned();
