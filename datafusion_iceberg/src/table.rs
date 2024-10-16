@@ -605,9 +605,8 @@ async fn table_scan(
         schema_builder.with_struct_field(field.clone());
     }
 
-
-
     for partition_field in table.metadata().default_partition_spec().unwrap().fields() {
+        println!(" Get partition_field {:?}", partition_field );
         schema_builder.with_struct_field(StructField {
             id: *partition_field.field_id(),
             name: partition_field.name().clone(),
@@ -623,6 +622,8 @@ async fn table_scan(
         });
     }
 
+
+
     let file_schema = Schema::builder()
         .with_schema_id(*schema.schema_id())
         .with_fields(
@@ -635,7 +636,11 @@ async fn table_scan(
         .map_err(iceberg_rust_spec::error::Error::from)
         .map_err(Error::from)?;
 
+    println!(" Get File Schema {:?}", file_schema );
+
     let file_schema: SchemaRef = Arc::new((file_schema.fields()).try_into().unwrap());
+
+    println!(" Get file_schema {:?}", file_schema );
 
     let file_scan_config = FileScanConfig {
         object_store_url,
