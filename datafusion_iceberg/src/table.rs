@@ -408,7 +408,6 @@ async fn table_scan(
     println!("physical_predicate {:?}", physical_predicate);
 
     if let Some(physical_predicate) = physical_predicate.clone() {
-        println!("in side of physical_predicate");
         let partition_predicates = conjunction(
             filters
                 .iter()
@@ -424,8 +423,6 @@ async fn table_scan(
                 .cloned(),
         );
 
-
-        println!("partition_predicates {:?}", partition_predicates);
 
         let manifests = match table.manifests(snapshot_range.0, snapshot_range.1).await {
             Ok(manifests) => manifests,
@@ -534,7 +531,7 @@ async fn table_scan(
             .map_err(Into::<Error>::into)?;
 
         data_files.into_iter().for_each(|manifest| {
-            //eprintln!("Manifest Status: {:?}", manifest.status());
+            eprintln!("Manifest Status: {:?}", manifest.status());
             if *manifest.status() != Status::Deleted {
                 let partition_values = manifest
                     .data_file()
@@ -545,6 +542,7 @@ async fn table_scan(
                         None => ScalarValue::Null,
                     })
                     .collect::<Vec<ScalarValue>>();
+
                 let object_meta = ObjectMeta {
                     location: util::strip_prefix(manifest.data_file().file_path()).into(),
                     size: *manifest.data_file().file_size_in_bytes() as usize,
@@ -572,6 +570,8 @@ async fn table_scan(
             }
         });
     };
+
+    println!(" Get all partition columns");
 
     // Get all partition columns
     let table_partition_cols: Vec<Field> = table
