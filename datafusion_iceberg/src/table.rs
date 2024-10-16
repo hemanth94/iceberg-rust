@@ -406,7 +406,9 @@ async fn table_scan(
     };
 
     println!("physical_predicate {:?}", physical_predicate);
+
     if let Some(physical_predicate) = physical_predicate.clone() {
+        println!("in side of physical_predicate");
         let partition_predicates = conjunction(
             filters
                 .iter()
