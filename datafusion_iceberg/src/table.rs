@@ -531,7 +531,7 @@ async fn table_scan(
             .map_err(Into::<Error>::into)?;
 
         data_files.into_iter().for_each(|manifest| {
-            eprintln!("Manifest Status: {:?}", manifest.status());
+
             if *manifest.status() != Status::Deleted {
                 let partition_values = manifest
                     .data_file()
@@ -571,7 +571,7 @@ async fn table_scan(
         });
     };
 
-    println!(" Get all partition columns");
+
 
     // Get all partition columns
     let table_partition_cols: Vec<Field> = table
@@ -596,17 +596,13 @@ async fn table_scan(
         .collect::<Result<Vec<_>, DataFusionError>>()
         .map_err(Into::<Error>::into)?;
 
-    println!(" Get all table_partition_cols {:?}", table_partition_cols );
-
     // Add the partition columns to the table schema
     let mut schema_builder = StructType::builder();
     for field in schema.fields().iter() {
-        println!(" Get field {:?}", field );
         schema_builder.with_struct_field(field.clone());
     }
 
     for partition_field in table.metadata().default_partition_spec().unwrap().fields() {
-        println!(" Get partition_field {:?}", partition_field );
         schema_builder.with_struct_field(StructField {
             id: *partition_field.field_id(),
             name: partition_field.name().clone(),
@@ -622,8 +618,6 @@ async fn table_scan(
         });
     }
 
-
-
     let file_schema = Schema::builder()
         .with_schema_id(*schema.schema_id())
         .with_fields(
@@ -636,11 +630,8 @@ async fn table_scan(
         .map_err(iceberg_rust_spec::error::Error::from)
         .map_err(Error::from)?;
 
-    println!(" Get File Schema {:?}", file_schema );
-
     let file_schema: SchemaRef = Arc::new((file_schema.fields()).try_into().unwrap());
 
-    println!(" Get file_schema {:?}", file_schema );
 
     let file_scan_config = FileScanConfig {
         object_store_url,
