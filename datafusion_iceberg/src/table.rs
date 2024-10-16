@@ -405,6 +405,7 @@ async fn table_scan(
         None
     };
 
+    println!("physical_predicate {:?}", physical_predicate);
     if let Some(physical_predicate) = physical_predicate.clone() {
         let partition_predicates = conjunction(
             filters
@@ -420,6 +421,10 @@ async fn table_scan(
                 })
                 .cloned(),
         );
+
+
+        println!("partition_predicates {:?}", partition_predicates);
+
         let manifests = match table.manifests(snapshot_range.0, snapshot_range.1).await {
             Ok(manifests) => manifests,
             Err(e) => {
