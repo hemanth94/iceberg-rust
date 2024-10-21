@@ -181,9 +181,6 @@ impl TableProvider for DataFusionTable {
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
         let table_state = self.tabular.read().await;
 
-        println!("in the table scan method");
-
-
         match table_state.deref() {
             Tabular::View(view) => {
                 let metadata = view.metadata();
@@ -203,7 +200,6 @@ impl TableProvider for DataFusionTable {
             }
             Tabular::Table(table) => {
                 let schema = self.schema();
-                println!("in the table scan method schema {:?}",schema );
                 let statistics = self.statistics().await.map_err(Into::<Error>::into)?;
                 table_scan(
                     table,
@@ -348,19 +344,15 @@ async fn table_scan(
     filters: &[Expr],
     limit: Option<usize>,
 ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
-    println!("in the table scan method {:?}", arrow_schema);
     let schema = snapshot_range
         .1
         .and_then(|snapshot_id| table.metadata().schema(snapshot_id).ok().cloned())
         .unwrap_or_else(|| table.current_schema(None).unwrap().clone());
 
-    println!("in the table scan method after snapshort range {:?}", schema);
-
     let location: &str = &table.catalog().location().to_owned();
     let region: &str = &table.catalog().region().to_owned();
 
     let result = build_object_store_url(location, region);
-    println!("{}", result);
 
     // Create a unique URI for this particular object store
     let object_store_url = ObjectStoreUrl::parse(&result)?;
@@ -392,8 +384,6 @@ async fn table_scan(
         })
         .collect::<Result<HashSet<_>, Error>>()?;
 
-    println!("partition_column_names {:?}", partition_column_names);
-
     // If there is a filter expression the manifests to read are pruned based on the pruning statistics available in the manifest_list file.
     let physical_predicate = if let Some(predicate) = conjunction(filters.iter().cloned()) {
         Some(create_physical_expr(
@@ -404,8 +394,6 @@ async fn table_scan(
     } else {
         None
     };
-
-    println!("physical_predicate {:?}", physical_predicate);
 
     if let Some(physical_predicate) = physical_predicate.clone() {
         let partition_predicates = conjunction(
@@ -433,8 +421,6 @@ async fn table_scan(
                 )))
             }
         };
-
-        println!("manifests list {:?}", manifests);
 
         // If there is a filter expression on the partition column, the manifest files to read are pruned.
         let data_files = if let Some(predicate) = partition_predicates {
@@ -472,7 +458,6 @@ async fn table_scan(
         let files_to_prune =
             pruning_predicate.prune(&PruneDataFiles::new(&schema, &arrow_schema, &data_files))?;
 
-        println!("Reaching");
         data_files
             .into_iter()
             .zip(files_to_prune.into_iter())
