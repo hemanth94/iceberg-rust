@@ -37,7 +37,6 @@ impl TryInto<ArrowSchema> for &StructType {
             })
             .collect::<Result<_, Error>>()?;
 
-        println!("Arrow schema {:?}", fields);
         let metadata = HashMap::new();
         Ok(ArrowSchema { fields, metadata })
     }
