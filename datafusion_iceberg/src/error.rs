@@ -1,6 +1,6 @@
 /*!
 Error type for iceberg
- */
+*/
 
 use datafusion::error::DataFusionError;
 use thiserror::Error;
@@ -40,7 +40,7 @@ pub enum Error {
     Iceberg(#[from] iceberg_rust::error::Error),
     /// Iceberg error
     #[error(transparent)]
-    IcebergSpec(#[from] iceberg_rust::spec::error::Error),
+    IcebergSpec(#[from] iceberg_rust_spec::error::Error),
     /// Serde json
     #[error(transparent)]
     JSONSerde(#[from] serde_json::Error),
