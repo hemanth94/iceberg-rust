@@ -499,8 +499,6 @@ async fn table_scan(
                 };
             });
     } else {
-        //println!("In the scan without predicate");
-        //println!("object_store_url {:}",object_store_url);
         let manifests = match table.manifests(snapshot_range.0, snapshot_range.1).await {
             Ok(manifests) => manifests,
             Err(e) => {
