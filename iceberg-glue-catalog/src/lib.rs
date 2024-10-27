@@ -15,7 +15,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::schema::GlueSchemaBuilder;
-use crate::utils::{EXTERNAL_TABLE,TABLE_TYPE,ICEBERG,METADATA_LOCATION, PREV_METADATA_LOCATION,get_metadata_location};
+use crate::utils::{EXTERNAL_TABLE,TABLE_TYPE,ICEBERG,METADATA_LOCATION, PREV_METADATA_LOCATION,get_metadata_location, convert_to_database};
 
 
 use iceberg_rust::{
@@ -122,6 +122,7 @@ impl  GlueCatalog {
 #[async_trait]
 impl Catalog for GlueCatalog {
     async fn create_namespace(&self, namespace: &Namespace, properties: Option<HashMap<String, String>>) -> Result<HashMap<String, String>, IcebergError> {
+        //let db_input = convert_to_database(namespace, properties);
         todo!()
     }
 
@@ -163,7 +164,7 @@ impl Catalog for GlueCatalog {
             let tables: Vec<Identifier> = resp
                 .table_list()
                 .iter()
-                .map(|tbl| Identifier::try_new(&[database.clone(), tbl.name().to_string()])) // Result<Identifier, Error>
+                .map(|tbl| Identifier::try_new(&[database.clone(), tbl.name().to_string()], None)) // Result<Identifier, Error>
                 .collect::<Result<Vec<Identifier>, iceberg_rust::error::Error>>()?; // Collect into Result<Vec<Identifier>, Error>
 
             table_list.extend(tables);

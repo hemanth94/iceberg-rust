@@ -39,7 +39,7 @@ impl TableBuilder {
         Ok(TableBuilder {
             metadata: TableMetadataBuilder::default(),
             catalog,
-            identifier: Identifier::parse(&identifier.to_string())?,
+            identifier: Identifier::parse(&identifier.to_string(), None)?,
         })
     }
     /// Building a table writes the metadata file and commits the table to either the metastore or the filesystem

@@ -14,34 +14,60 @@ use super::namespace::Namespace;
 pub static SEPARATOR: &str = ".";
 
 ///Identifies a table in an iceberg catalog.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Identifier {
     namespace: Namespace,
     name: String,
 }
 
 impl Identifier {
-    ///Create Identifier
-    pub fn try_new(names: &[String]) -> Result<Self, Error> {
-        let length = names.len();
-        if names.is_empty() {
-            Err(Error::InvalidFormat("identifier sequence".to_string()))
-        } else if names[length - 1].is_empty() {
-            Err(Error::InvalidFormat("table name".to_string()))
-        } else {
-            Ok(Identifier {
-                namespace: Namespace::try_new(&names[0..length - 1])?,
-                name: names[length - 1].clone(),
-            })
+    /// Create new Identifier
+    pub fn new(namespace: &[String], name: &str) -> Self {
+        Self {
+            namespace: Namespace(namespace.to_vec()),
+            name: name.to_owned(),
         }
     }
+
+    ///Create Identifier
+    pub fn try_new(names: &[String], default_namespace: Option<&[String]>) -> Result<Self, Error> {
+        let mut parts = names.iter().rev();
+        let table_name = parts.next().ok_or(Error::InvalidFormat(format!(
+            "Identifier {:?} is empty",
+            names
+        )))?;
+        if table_name.is_empty() {
+            return Err(Error::InvalidFormat(format!(
+                "Table name {:?} is empty",
+                table_name
+            )));
+        }
+        let namespace: Vec<String> = parts.rev().map(ToOwned::to_owned).collect();
+        let namespace = if namespace.is_empty() {
+            default_namespace
+                .ok_or(Error::NotFound(
+                    "Default".to_owned(),
+                    "namespace".to_owned(),
+                ))?
+                .iter()
+                .map(ToOwned::to_owned)
+                .collect()
+        } else {
+            namespace
+        };
+        Ok(Identifier {
+            namespace: Namespace(namespace),
+            name: table_name.to_owned(),
+        })
+    }
+
     ///Parse
-    pub fn parse(identifier: &str) -> Result<Self, Error> {
+    pub fn parse(identifier: &str, default_namespace: Option<&[String]>) -> Result<Self, Error> {
         let names = identifier
             .split(SEPARATOR)
-            .map(|x| x.to_string())
+            .map(ToOwned::to_owned)
             .collect::<Vec<String>>();
-        Identifier::try_new(&names)
+        Identifier::try_new(&names, default_namespace)
     }
     /// Return namespace of table
     pub fn namespace(&self) -> &Namespace {
@@ -62,7 +88,7 @@ impl Display for Identifier {
 impl TryFrom<&str> for Identifier {
     type Error = Error;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        Self::parse(value)
+        Self::parse(value, None)
     }
 }
 
@@ -73,28 +99,34 @@ mod tests {
 
     #[test]
     fn test_new() {
-        let identifier = Identifier::try_new(&[
-            "level1".to_string(),
-            "level2".to_string(),
-            "table".to_string(),
-        ])
-        .unwrap();
+        let identifier = Identifier::try_new(
+            &[
+                "level1".to_string(),
+                "level2".to_string(),
+                "table".to_string(),
+            ],
+            None,
+        )
+            .unwrap();
         assert_eq!(&format!("{}", identifier), "level1.level2.table");
     }
     #[test]
     #[should_panic]
     fn test_empty() {
-        let _ = Identifier::try_new(&["level1".to_string(), "level2".to_string(), "".to_string()])
+        let _ = Identifier::try_new(
+            &["level1".to_string(), "level2".to_string(), "".to_string()],
+            None,
+        )
             .unwrap();
     }
     #[test]
     #[should_panic]
     fn test_empty_identifier() {
-        let _ = Identifier::try_new(&[]).unwrap();
+        let _ = Identifier::try_new(&[], None).unwrap();
     }
     #[test]
     fn test_parse() {
-        let identifier = Identifier::parse("level1.level2.table").unwrap();
+        let identifier = Identifier::parse("level1.level2.table", None).unwrap();
         assert_eq!(&format!("{}", identifier), "level1.level2.table");
     }
 }

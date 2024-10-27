@@ -44,7 +44,7 @@ impl ViewBuilder {
         schema: Schema,
         catalog: Arc<dyn Catalog>,
     ) -> Result<Self, Error> {
-        let identifier = Identifier::parse(&identifier.to_string())?;
+        let identifier = Identifier::parse(&identifier.to_string(), None)?;
         let mut builder = ViewMetadataBuilder::default();
         builder
             .with_schema((1, schema))

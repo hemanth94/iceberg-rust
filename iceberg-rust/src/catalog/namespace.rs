@@ -10,8 +10,8 @@ use std::ops::Deref;
 use crate::{catalog::identifier::SEPARATOR, error::Error};
 
 /// Namespace struct for iceberg catalogs
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Namespace(Vec<String>);
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub struct Namespace(pub(crate) Vec<String>);
 
 impl Namespace {
     /// Try to create new namespace with sequence of strings.
@@ -40,7 +40,7 @@ impl Namespace {
                     namespace
                 )))?
                 .0
-                .split("\u{1F}")
+                .split('\u{1F}')
                 .map(ToString::to_string)
                 .collect(),
         ))
@@ -78,7 +78,7 @@ mod tests {
             "level2".to_string(),
             "level3".to_string(),
         ])
-        .unwrap();
+            .unwrap();
         assert_eq!(&format!("{}", namespace), "level1.level2.level3");
     }
     #[test]

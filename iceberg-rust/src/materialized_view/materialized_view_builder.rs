@@ -81,7 +81,7 @@ impl MaterializedViewBuilder {
                 ]),
             });
         Ok(Self {
-            identifier: Identifier::parse(&identifier.to_string())?,
+            identifier: Identifier::parse(&identifier.to_string(), None)?,
             catalog,
             metadata: builder,
         })
@@ -110,7 +110,7 @@ impl MaterializedViewBuilder {
         self.catalog
             .clone()
             .create_table(
-                Identifier::parse(&metadata.properties.storage_table)?,
+                Identifier::parse(&metadata.properties.storage_table, None)?,
                 table_metadata,
             )
             .await?;

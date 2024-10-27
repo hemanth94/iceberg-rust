@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::error::Error;
 use uuid::Uuid;
 
 use iceberg_rust::{
@@ -14,7 +13,10 @@ use iceberg_rust::{
     },
 
 };
+use iceberg_rust::catalog::namespace::Namespace;
 use iceberg_rust::spec::tabular::TabularMetadataRef;
+use aws_sdk_glue::types::{DatabaseInput};
+
 
 
 pub const EXTERNAL_TABLE: &str = "EXTERNAL_TABLE";
@@ -26,8 +28,6 @@ pub const ICEBERG: &str = "ICEBERG";
 pub const METADATA_LOCATION: &str = "metadata_location";
 
 pub const PREV_METADATA_LOCATION: &str = "prev_metadata_location";
-
-
 
 pub(crate) fn get_metadata_location(
     parameters: &Option<HashMap<String, String>>,
@@ -68,4 +68,65 @@ pub fn new_metadata_location(metadata: TabularMetadataRef<'_>) -> String {
         + "-"
         + &transaction_uuid.to_string()
         + ".metadata.json"
+}
+
+use std::error::Error;
+use aws_sdk_glue::error::BuildError;
+
+pub(crate) fn validate_namespace(namespace: &Namespace) -> Result<String, Box<dyn Error>> {
+    let name = namespace.as_ref();
+
+    if name.len() != 1 {
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!(
+                "Invalid database name: {:?}, hierarchical namespaces are not supported",
+                namespace
+            ),
+        )));
+    }
+
+    let name = name[0].clone();
+
+    if name.is_empty() {
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Invalid database, provided namespace is empty".to_string(),
+        )));
+    }
+
+    Ok(name)
+}
+
+pub(crate) fn convert_to_database(
+    namespace: &Namespace,
+    properties: Option<HashMap<String, String>>,
+) -> Result<DatabaseInput, Box<dyn Error>> {
+    let db_name = validate_namespace(namespace).map_err(|e| {
+        Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("Namespace validation failed: {}", e),
+        )) as Box<dyn Error>
+    })?;
+
+    let mut builder = DatabaseInput::builder().name(db_name);
+
+    // Use unwrap_or_default() to handle None case for properties
+    for (k, v) in properties.unwrap_or_default() {
+        match k.as_str() {
+            DESCRIPTION => {
+                builder = builder.description(v);
+            }
+            LOCATION => {
+                builder = builder.location_uri(v);
+            }
+            _ => {
+                builder = builder.parameters(k, v);
+            }
+        }
+    }
+
+    builder.build().map_err(|e| {
+        Box::new(e) as Box<dyn Error> // Adjust this as necessary based on what `builder.build()` returns
+    })
 }
