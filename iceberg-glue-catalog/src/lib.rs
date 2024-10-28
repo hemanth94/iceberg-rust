@@ -48,10 +48,12 @@ use iceberg_rust::util::strip_prefix;
 
 
 use aws_sdk_glue::types::{StorageDescriptor, TableInput};
+use dashmap::DashMap;
+use futures::lock::Mutex;
 
 
 use object_store::ObjectStore;
-
+use iceberg_rust::catalog::CatalogList;
 
 
 #[derive(Builder, Debug, Clone)]
@@ -558,4 +560,11 @@ impl Catalog for GlueCatalog {
             .unwrap_or(&"us-east-1".to_string())
             .to_string()
     }
+}
+
+#[derive(Debug)]
+pub struct glueCatalogList {
+    config: GlueCatalogConfig,
+    client: GlueClient,
+    object_store: Arc<dyn ObjectStore>
 }

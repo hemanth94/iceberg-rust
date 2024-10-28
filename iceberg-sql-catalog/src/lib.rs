@@ -49,6 +49,7 @@ pub struct SqlCatalog {
     region: String,
 }
 
+
 pub mod error;
 
 impl SqlCatalog {
