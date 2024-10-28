@@ -223,7 +223,7 @@ impl Catalog for SqlCatalog {
         Ok(iter
             .map(|x| {
                 x.and_then(|y| {
-                    Identifier::parse(&(y.table_namespace.to_string() + "." + &y.table_name))
+                    Identifier::parse(&(y.table_namespace.to_string() + "." + &y.table_name), None)
                         .map_err(|err| sqlx::Error::Decode(Box::new(err)))
                 })
             })

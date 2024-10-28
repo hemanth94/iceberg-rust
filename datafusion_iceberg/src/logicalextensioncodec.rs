@@ -83,7 +83,7 @@ impl LogicalExtensionCodec for IcebergExtensionCodec {
 
         let table = tokio::task::block_in_place(|| {
             // Block on the async read call
-            let identifier = Identifier::parse(&msg.identifier).unwrap();
+            let identifier = Identifier::parse(&msg.identifier, None).unwrap();
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async { catalog.load_tabular(&identifier).await })
         });

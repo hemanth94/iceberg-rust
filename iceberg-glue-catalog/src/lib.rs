@@ -161,6 +161,8 @@ impl Catalog for GlueCatalog {
             //let builder = with_catalog_id!(builder, self.config);
             let resp = builder.send().await.map_err(|_| IcebergError::InvalidFormat(format!("Error ")))?;
 
+            println!("resp {:?}", resp);
+
             let tables: Vec<Identifier> = resp
                 .table_list()
                 .iter()

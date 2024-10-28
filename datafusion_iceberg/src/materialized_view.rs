@@ -82,7 +82,7 @@ pub async fn refresh_materialized_view(
                     .load_tabular(&Identifier::try_new(&[
                         namespace_name.to_string(),
                         identifier.table().to_string(),
-                    ])?)
+                    ], None)?)
                     .await?
                 {
                     Tabular::View(_) => {
