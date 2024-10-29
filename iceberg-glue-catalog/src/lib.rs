@@ -411,8 +411,6 @@ impl Catalog for GlueCatalog {
                 let previous_metadata_location = get_metadata_location(&table.parameters)
                     .map_err(|e| IcebergError::InvalidFormat(format!("Error getting metadata location: {}", e)))?;
 
-
-
                 let bytes = &self
                     .object_store
                     .get(&strip_prefix(&previous_metadata_location).as_str().into())
@@ -567,4 +565,18 @@ pub struct glueCatalogList {
     config: GlueCatalogConfig,
     client: GlueClient,
     object_store: Arc<dyn ObjectStore>
+}
+
+#[async_trait]
+impl CatalogList for GlueCatalog {
+    async fn catalog(&self, name: &str) -> Option<Arc<dyn Catalog>> {
+        todo!();
+        //Some(Arc::new(GlueCatalog {
+
+
+        //}))
+    }
+    async fn list_catalogs(&self) -> Vec<String> {
+        todo!();
+    }
 }
