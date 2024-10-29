@@ -617,7 +617,7 @@ impl CatalogList for GlueCatalog {
         let config = aws_config::from_env().region(region_provider).load().await;
         let client = Client::new(&config);
 
-        let response = client.get_caller_identity().send().await.u;
+        let response = client.get_caller_identity().send().await.unwrap();
         let mut account_number = Vec::new();
 
         // Extract and print the account number
