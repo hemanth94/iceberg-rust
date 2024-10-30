@@ -665,10 +665,10 @@ impl CatalogList for glueCatalogList {
 
         // Extract and print the account number
         if let Some(account) = response.account() {
-            println!("Account ID: {}", account);
+            //println!("Account ID: {}", account);
             account_number.push(account.to_string());
         } else {
-            println!("Unable to retrieve account ID.");
+            //println!("Unable to retrieve account ID.");
         }
         account_number
 
