@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_glue::config::ProvideCredentials;
 use aws_sdk_sts::Client;
-// use aws_sdk_glue::Client;
+use aws_sdk_glue;
 use aws_types::region::Region;
 use derive_builder::Builder;
 use object_store;
@@ -93,7 +93,7 @@ impl GlueCatalog {
 
         let object_store = get_object_store(&glueconfig.warehouse, Some(&region.clone()));
 
-        let client = Client::new(&config);
+        let client = aws_sdk_glue::Client::new(&config);
 
         let credentials_provider = config.credentials_provider();
 
@@ -629,24 +629,6 @@ impl CatalogList for GlueCatalog {
         }
         account_number
 
-        // List databases in the Glue catalog, which will also give the catalog_id
-        //
-        // Probably below code can be used to get list of catalog ids.. Not sure..!!
-        //
 
-        // let response = client.get_databases().send().await.unwrap();
-        // let mut list_catalogs = Vec::new();
-
-        // println!("Databases in the Glue catalog:");
-        // for database in response.database_list() {
-        //     println!("Database Name: {:?}", database.name());
-        //     if let Some(catalog_id) = database.catalog_id() {
-        //         list_catalogs.push(catalog_id.to_string());
-        //         println!("Catalog ID: {:?}", catalog_id);
-        //     } else {
-        //         println!("No Catalog ID found for this database.");
-        //     }
-        // }
-        // list_catalogs
     }
 }
