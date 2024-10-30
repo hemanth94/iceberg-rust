@@ -647,7 +647,7 @@ impl glueCatalogList {
 
 
 #[async_trait]
-impl CatalogList for GlueCatalog {
+impl CatalogList for glueCatalogList {
     async fn catalog(&self, name: &str) -> Option<Arc<dyn Catalog>> {
         Some(Arc::new(GlueCatalog {
             config: self.config.clone(),
