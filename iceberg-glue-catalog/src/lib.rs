@@ -170,7 +170,7 @@ impl Catalog for GlueCatalog {
                 .await
                 .map_err(|_| IcebergError::InvalidFormat(format!("Error ")))?;
 
-            println!("resp {:?}", resp);
+            //println!("resp {:?}", resp);
 
             let tables: Vec<Identifier> = resp
                 .table_list()
