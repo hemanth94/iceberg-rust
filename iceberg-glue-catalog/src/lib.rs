@@ -603,6 +603,49 @@ pub struct glueCatalogList {
     object_store: Arc<dyn ObjectStore>,
 }
 
+
+impl glueCatalogList {
+    pub async fn new(glueconfig: GlueCatalogConfig) -> Result<Self, Box<dyn Error>> {
+        let region = glueconfig
+            .props
+            .get("region")
+            .unwrap_or(&"us-east-1".to_string())
+            .to_string();
+        let profile_name = glueconfig
+            .props
+            .get("profile_name")
+            .unwrap_or(&"default".to_string())
+            .to_string();
+
+        let config = aws_config::from_env()
+            .profile_name(profile_name) // Set the profile here
+            .region(Region::new(region.clone()))
+            .load()
+            .await;
+
+        let object_store = get_object_store(&glueconfig.warehouse, Some(&region.clone()));
+
+        let client = aws_sdk_glue::Client::new(&config);
+
+        let credentials_provider = config.credentials_provider();
+
+        if let Some(provider) = credentials_provider {
+            let creds = provider.provide_credentials().await?;
+            println!("Access Key: {}", creds.access_key_id());
+            println!("Secret Key: {}", creds.secret_access_key());
+        } else {
+            println!("No credentials provider available");
+        }
+
+        Ok(glueCatalogList {
+            config: glueconfig,
+            client: GlueClient(client),
+            object_store: object_store,
+        })
+    }
+}
+
+
 #[async_trait]
 impl CatalogList for GlueCatalog {
     async fn catalog(&self, name: &str) -> Option<Arc<dyn Catalog>> {
