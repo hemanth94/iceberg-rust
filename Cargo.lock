@@ -2264,6 +2264,7 @@ dependencies = [
  "async-trait",
  "aws-config",
  "aws-sdk-glue",
+ "aws-sdk-sts",
  "aws-types",
  "bytes",
  "dashmap",

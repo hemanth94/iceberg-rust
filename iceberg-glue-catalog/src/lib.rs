@@ -3,8 +3,10 @@ mod schema;
 mod utils;
 
 use async_trait::async_trait;
+use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_glue::config::ProvideCredentials;
-use aws_sdk_glue::Client;
+use aws_sdk_sts::Client;
+// use aws_sdk_glue::Client;
 use aws_types::region::Region;
 use derive_builder::Builder;
 use object_store;
@@ -15,46 +17,39 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::schema::GlueSchemaBuilder;
-use crate::utils::{EXTERNAL_TABLE,TABLE_TYPE,ICEBERG,METADATA_LOCATION, PREV_METADATA_LOCATION,get_metadata_location, convert_to_database};
-
+use crate::utils::{
+    convert_to_database, get_metadata_location, EXTERNAL_TABLE, ICEBERG, METADATA_LOCATION,
+    PREV_METADATA_LOCATION, TABLE_TYPE,
+};
 
 use iceberg_rust::{
-    io::object_store::get_object_store,
     catalog::{
-        bucket::{parse_bucket,Bucket},
-        commit::{
-            apply_table_updates, check_table_requirements, CommitTable, CommitView,
-        },
+        bucket::{parse_bucket, Bucket},
+        commit::{apply_table_updates, check_table_requirements, CommitTable, CommitView},
         identifier::Identifier,
         namespace::Namespace,
         tabular::Tabular,
         Catalog,
     },
     error::Error as IcebergError,
+    io::object_store::get_object_store,
     materialized_view::MaterializedView,
     spec::{
-        materialized_view_metadata::MaterializedViewMetadata,
-        table_metadata::TableMetadata,
-        tabular::TabularMetadata,
-        view_metadata::ViewMetadata,
+        materialized_view_metadata::MaterializedViewMetadata, table_metadata::TableMetadata,
+        tabular::TabularMetadata, view_metadata::ViewMetadata,
     },
     table::Table,
     view::View,
 };
 
-
 use iceberg_rust::util::strip_prefix;
-
-
 
 use aws_sdk_glue::types::{StorageDescriptor, TableInput};
 use dashmap::DashMap;
 use futures::lock::Mutex;
 
-
-use object_store::ObjectStore;
 use iceberg_rust::catalog::CatalogList;
-
+use object_store::ObjectStore;
 
 #[derive(Builder, Debug, Clone)]
 pub struct GlueCatalogConfig {
@@ -67,8 +62,7 @@ pub struct GlueCatalogConfig {
     props: HashMap<String, String>,
 }
 
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct GlueClient(aws_sdk_glue::Client);
 
 #[derive(Debug)]
@@ -78,8 +72,7 @@ pub struct GlueCatalog {
     object_store: Arc<dyn ObjectStore>,
 }
 
-
-impl  GlueCatalog {
+impl GlueCatalog {
     pub async fn new(glueconfig: GlueCatalogConfig) -> Result<Self, Box<dyn Error>> {
         let region = glueconfig
             .props
@@ -118,12 +111,15 @@ impl  GlueCatalog {
             object_store: object_store,
         })
     }
-    }
-
+}
 
 #[async_trait]
 impl Catalog for GlueCatalog {
-    async fn create_namespace(&self, namespace: &Namespace, properties: Option<HashMap<String, String>>) -> Result<HashMap<String, String>, IcebergError> {
+    async fn create_namespace(
+        &self,
+        namespace: &Namespace,
+        properties: Option<HashMap<String, String>>,
+    ) -> Result<HashMap<String, String>, IcebergError> {
         //let db_input = convert_to_database(namespace, properties);
         todo!()
     }
@@ -132,11 +128,19 @@ impl Catalog for GlueCatalog {
         todo!()
     }
 
-    async fn load_namespace(&self, namespace: &Namespace) -> Result<HashMap<String, String>, IcebergError> {
+    async fn load_namespace(
+        &self,
+        namespace: &Namespace,
+    ) -> Result<HashMap<String, String>, IcebergError> {
         todo!()
     }
 
-    async fn update_namespace(&self, namespace: &Namespace, updates: Option<HashMap<String, String>>, removals: Option<Vec<String>>) -> Result<(), IcebergError> {
+    async fn update_namespace(
+        &self,
+        namespace: &Namespace,
+        updates: Option<HashMap<String, String>>,
+        removals: Option<Vec<String>>,
+    ) -> Result<(), IcebergError> {
         todo!()
     }
 
@@ -145,7 +149,7 @@ impl Catalog for GlueCatalog {
     }
 
     async fn list_tabulars(&self, namespace: &Namespace) -> Result<Vec<Identifier>, IcebergError> {
-        let database =  namespace.to_string();
+        let database = namespace.to_string();
 
         let mut table_list: Vec<Identifier> = Vec::new();
         let mut next_token: Option<String> = None;
@@ -161,7 +165,10 @@ impl Catalog for GlueCatalog {
                 None => self.client.0.get_tables().database_name(&database),
             };
             //let builder = with_catalog_id!(builder, self.config);
-            let resp = builder.send().await.map_err(|_| IcebergError::InvalidFormat(format!("Error ")))?;
+            let resp = builder
+                .send()
+                .await
+                .map_err(|_| IcebergError::InvalidFormat(format!("Error ")))?;
 
             println!("resp {:?}", resp);
 
@@ -180,12 +187,9 @@ impl Catalog for GlueCatalog {
         }
 
         Ok(table_list)
-
-
     }
 
     async fn list_namespaces(&self, parent: Option<&str>) -> Result<Vec<Namespace>, IcebergError> {
-
         let mut database_list: Vec<Namespace> = Vec::new();
         let mut next_token: Option<String> = None;
 
@@ -195,7 +199,10 @@ impl Catalog for GlueCatalog {
                 None => self.client.0.get_databases(),
             };
 
-            let resp = builder.send().await.map_err(|_| IcebergError::InvalidFormat(format!("Error ")))?;
+            let resp = builder
+                .send()
+                .await
+                .map_err(|_| IcebergError::InvalidFormat(format!("Error ")))?;
 
             let dbs: Vec<Namespace> = resp
                 .database_list()
@@ -211,8 +218,6 @@ impl Catalog for GlueCatalog {
                 break Ok(database_list);
             }
         }
-
-
     }
 
     async fn tabular_exists(&self, identifier: &Identifier) -> Result<bool, IcebergError> {
@@ -231,7 +236,10 @@ impl Catalog for GlueCatalog {
         todo!()
     }
 
-    async fn load_tabular(self: Arc<Self>, identifier: &Identifier) -> Result<Tabular, IcebergError> {
+    async fn load_tabular(
+        self: Arc<Self>,
+        identifier: &Identifier,
+    ) -> Result<Tabular, IcebergError> {
         let database = identifier.namespace().to_string();
         let tablename = identifier.name().to_string();
 
@@ -242,7 +250,10 @@ impl Catalog for GlueCatalog {
             .database_name(database.clone())
             .name(tablename.clone());
 
-        let glue_table_output = builder.send().await.map_err(|_| IcebergError::InvalidFormat("Failed to build table input".to_string()))?;
+        let glue_table_output = builder
+            .send()
+            .await
+            .map_err(|_| IcebergError::InvalidFormat("Failed to build table input".to_string()))?;
 
         match glue_table_output.table() {
             None => Err(IcebergError::InvalidFormat(format!(
@@ -250,8 +261,9 @@ impl Catalog for GlueCatalog {
                 database, tablename
             ))),
             Some(table) => {
-                let metadata_location = get_metadata_location(&table.parameters)
-                    .map_err(|e| IcebergError::InvalidFormat(format!("Error getting metadata location: {}", e)))?;
+                let metadata_location = get_metadata_location(&table.parameters).map_err(|e| {
+                    IcebergError::InvalidFormat(format!("Error getting metadata location: {}", e))
+                })?;
 
                 let bytes = &self
                     .object_store
@@ -273,16 +285,19 @@ impl Catalog for GlueCatalog {
                         MaterializedView::new(identifier.clone(), self.clone(), metadata).await?,
                     )),
                 }
-
             }
         }
     }
 
-    async fn create_table(self: Arc<Self>, identifier: Identifier, metadata: TableMetadata) -> Result<iceberg_rust::table::Table, IcebergError> {
+    async fn create_table(
+        self: Arc<Self>,
+        identifier: Identifier,
+        metadata: TableMetadata,
+    ) -> Result<iceberg_rust::table::Table, IcebergError> {
         /*
-      TO-DO
-      --> Branch
-       */
+        TO-DO
+        --> Branch
+         */
         let schema = metadata.current_schema(None);
         let bucket = parse_bucket(&self.config.warehouse)?;
 
@@ -291,7 +306,6 @@ impl Catalog for GlueCatalog {
         let table_location = format!("{}{}", bucket, location);
         let database = identifier.namespace().to_string();
         let tablename = identifier.name().to_string();
-
 
         let uuid = Uuid::new_v4();
         let version = &metadata.last_sequence_number;
@@ -326,7 +340,10 @@ impl Catalog for GlueCatalog {
         // Set up parameters for the table
         let mut parameters = HashMap::new();
         parameters.insert(TABLE_TYPE.to_string(), ICEBERG.to_string());
-        parameters.insert(METADATA_LOCATION.to_string(), bucket_metadata_location.to_string());
+        parameters.insert(
+            METADATA_LOCATION.to_string(),
+            bucket_metadata_location.to_string(),
+        );
 
         // Create the table input using the builder
         let table_input_builder = TableInput::builder()
@@ -336,11 +353,9 @@ impl Catalog for GlueCatalog {
             .table_type(EXTERNAL_TABLE);
 
         // Build the table input and handle errors
-        let table_input = table_input_builder
-            .build()
-            .map_err(|_| IcebergError::InvalidFormat(
-                "Table update on an entity that is not a table".to_owned(),
-            ))?;
+        let table_input = table_input_builder.build().map_err(|_| {
+            IcebergError::InvalidFormat("Table update on an entity that is not a table".to_owned())
+        })?;
 
         // Send the create table request to AWS Glue
         let create_response = self
@@ -368,25 +383,33 @@ impl Catalog for GlueCatalog {
             }
             Err(e) => {
                 eprintln!("Failed to create table: {:?}", e);
-                let iceberg_error: IcebergError = IcebergError::InvalidFormat(format!(
-                    "Failed to create table: {}",
-                    e
-                ));
+                let iceberg_error: IcebergError =
+                    IcebergError::InvalidFormat(format!("Failed to create table: {}", e));
                 Err(iceberg_error)
             }
         }
     }
 
-    async fn create_view(self: Arc<Self>, identifier: Identifier, metadata: ViewMetadata) -> Result<View, IcebergError> {
+    async fn create_view(
+        self: Arc<Self>,
+        identifier: Identifier,
+        metadata: ViewMetadata,
+    ) -> Result<View, IcebergError> {
         todo!()
     }
 
-    async fn create_materialized_view(self: Arc<Self>, identifier: Identifier, metadata: MaterializedViewMetadata) -> Result<MaterializedView, IcebergError> {
+    async fn create_materialized_view(
+        self: Arc<Self>,
+        identifier: Identifier,
+        metadata: MaterializedViewMetadata,
+    ) -> Result<MaterializedView, IcebergError> {
         todo!()
     }
 
-    async fn update_table(self: Arc<Self>, commit: CommitTable) -> Result<iceberg_rust::table::Table, IcebergError> {
-
+    async fn update_table(
+        self: Arc<Self>,
+        commit: CommitTable,
+    ) -> Result<iceberg_rust::table::Table, IcebergError> {
         let identifier = commit.identifier;
 
         let database = identifier.namespace().to_string();
@@ -400,7 +423,10 @@ impl Catalog for GlueCatalog {
             .database_name(database.clone())
             .name(tablename.clone());
 
-        let glue_table_output = builder.send().await.map_err(|_| IcebergError::InvalidFormat("Failed to build table input".to_string()))?;
+        let glue_table_output = builder
+            .send()
+            .await
+            .map_err(|_| IcebergError::InvalidFormat("Failed to build table input".to_string()))?;
 
         match glue_table_output.table() {
             None => Err(IcebergError::InvalidFormat(format!(
@@ -408,8 +434,13 @@ impl Catalog for GlueCatalog {
                 database, tablename
             ))),
             Some(table) => {
-                let previous_metadata_location = get_metadata_location(&table.parameters)
-                    .map_err(|e| IcebergError::InvalidFormat(format!("Error getting metadata location: {}", e)))?;
+                let previous_metadata_location =
+                    get_metadata_location(&table.parameters).map_err(|e| {
+                        IcebergError::InvalidFormat(format!(
+                            "Error getting metadata location: {}",
+                            e
+                        ))
+                    })?;
 
                 let bytes = &self
                     .object_store
@@ -419,8 +450,6 @@ impl Catalog for GlueCatalog {
                     .await?;
 
                 let metadata: TabularMetadata = serde_json::from_str(std::str::from_utf8(bytes)?)?;
-
-
 
                 let mut table_metadata = match metadata {
                     TabularMetadata::Table(metadata) => metadata,
@@ -437,7 +466,6 @@ impl Catalog for GlueCatalog {
                         "Table requirements not valid".to_owned(),
                     ));
                 }
-
 
                 apply_table_updates(&mut table_metadata, commit.updates)?;
 
@@ -475,12 +503,17 @@ impl Catalog for GlueCatalog {
                     .location(table_location.clone())
                     .build();
 
-
                 // Set up parameters for the table
                 let mut parameters = HashMap::new();
                 parameters.insert(TABLE_TYPE.to_string(), ICEBERG.to_string());
-                parameters.insert(METADATA_LOCATION.to_string(), bucket_metadata_location.to_string());
-                parameters.insert(PREV_METADATA_LOCATION.to_string(), previous_metadata_location.to_string());
+                parameters.insert(
+                    METADATA_LOCATION.to_string(),
+                    bucket_metadata_location.to_string(),
+                );
+                parameters.insert(
+                    PREV_METADATA_LOCATION.to_string(),
+                    previous_metadata_location.to_string(),
+                );
 
                 // Create the table input using the builder
                 let table_input_builder = TableInput::builder()
@@ -489,12 +522,11 @@ impl Catalog for GlueCatalog {
                     .storage_descriptor(storage_descriptor)
                     .table_type(EXTERNAL_TABLE);
 
-
-                let table_input = table_input_builder
-                    .build()
-                    .map_err(|_| IcebergError::InvalidFormat(
+                let table_input = table_input_builder.build().map_err(|_| {
+                    IcebergError::InvalidFormat(
                         "Table update on an entity that is not a table".to_owned(),
-                    ))?;
+                    )
+                })?;
 
                 // Send the update table request to AWS Glue
                 let update_response = self
@@ -508,21 +540,22 @@ impl Catalog for GlueCatalog {
 
                 match update_response {
                     Ok(response) => {
-                        return self.clone()
-                            .load_tabular(&identifier)
-                            .await
-                            .and_then(|x| match x {
+                        return self.clone().load_tabular(&identifier).await.and_then(
+                            |x| match x {
                                 Tabular::Table(table) => Ok(table),
-                                _ => Err(IcebergError::InvalidFormat("Table update on an entity that is not a table".to_owned())),
-                            });
+                                _ => Err(IcebergError::InvalidFormat(
+                                    "Table update on an entity that is not a table".to_owned(),
+                                )),
+                            },
+                        );
                     }
                     Err(e) => {
-                        return Err(IcebergError::InvalidFormat(format!("Failed to update table: {}", e)));
+                        return Err(IcebergError::InvalidFormat(format!(
+                            "Failed to update table: {}",
+                            e
+                        )));
                     }
                 }
-
-
-
             }
         }
     }
@@ -531,7 +564,10 @@ impl Catalog for GlueCatalog {
         todo!()
     }
 
-    async fn update_materialized_view(self: Arc<Self>, commit: CommitView) -> Result<MaterializedView, IcebergError> {
+    async fn update_materialized_view(
+        self: Arc<Self>,
+        commit: CommitView,
+    ) -> Result<MaterializedView, IcebergError> {
         todo!()
     }
 
@@ -564,19 +600,53 @@ impl Catalog for GlueCatalog {
 pub struct glueCatalogList {
     config: GlueCatalogConfig,
     client: GlueClient,
-    object_store: Arc<dyn ObjectStore>
+    object_store: Arc<dyn ObjectStore>,
 }
 
 #[async_trait]
 impl CatalogList for GlueCatalog {
     async fn catalog(&self, name: &str) -> Option<Arc<dyn Catalog>> {
-        todo!();
-        //Some(Arc::new(GlueCatalog {
-
-
-        //}))
+        Some(Arc::new(GlueCatalog {
+            config: self.config.clone(),
+            client: self.client.clone(),
+            object_store: self.object_store.clone(),
+        }))
     }
     async fn list_catalogs(&self) -> Vec<String> {
-        todo!();
+        let region_provider = RegionProviderChain::default_provider().or_else("us-west-2"); // Replace with your AWS region
+        let config = aws_config::from_env().region(region_provider).load().await;
+        let client = Client::new(&config);
+
+        let response = client.get_caller_identity().send().await.unwrap();
+        let mut account_number = Vec::new();
+
+        // Extract and print the account number
+        if let Some(account) = response.account() {
+            println!("Account ID: {}", account);
+            account_number.push(account.to_string());
+        } else {
+            println!("Unable to retrieve account ID.");
+        }
+        account_number
+
+        // List databases in the Glue catalog, which will also give the catalog_id
+        //
+        // Probably below code can be used to get list of catalog ids.. Not sure..!!
+        //
+
+        // let response = client.get_databases().send().await.unwrap();
+        // let mut list_catalogs = Vec::new();
+
+        // println!("Databases in the Glue catalog:");
+        // for database in response.database_list() {
+        //     println!("Database Name: {:?}", database.name());
+        //     if let Some(catalog_id) = database.catalog_id() {
+        //         list_catalogs.push(catalog_id.to_string());
+        //         println!("Catalog ID: {:?}", catalog_id);
+        //     } else {
+        //         println!("No Catalog ID found for this database.");
+        //     }
+        // }
+        // list_catalogs
     }
 }
