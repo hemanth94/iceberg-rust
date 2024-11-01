@@ -19,9 +19,6 @@ fn get_aws_credentials() -> Result<Option<(String, String)>, String> {
     }
 
 
-   return Ok(None);
-    /*
-
    // Check if running on ECS
    fn is_ecs() -> bool {
        env::var("ECS_CONTAINER_METADATA_URI").is_ok()
@@ -70,7 +67,6 @@ fn get_aws_credentials() -> Result<Option<(String, String)>, String> {
 
    Err("No valid AWS credentials found in environment or config file.".to_string())
 
-     */
 }
 
 pub fn get_object_store(url: &str, region: Option<&str>) -> Arc<dyn ObjectStore> {
