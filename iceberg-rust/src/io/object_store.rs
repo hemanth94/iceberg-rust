@@ -18,7 +18,6 @@ fn get_aws_credentials() -> Result<Option<(String, String)>, String> {
         }
     }
 
-
    // Check if running on ECS
    fn is_ecs() -> bool {
        env::var("ECS_CONTAINER_METADATA_URI").is_ok()
