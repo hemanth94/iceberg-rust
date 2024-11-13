@@ -3,14 +3,13 @@
  *
  * Pruning is done on two levels:
  *
- * 1. Prune ManifestFiles based on information in Manifest_list_file
- * 2. Prune DataFiles based on information in Manifest_file
+ * 1. Prune manifests based on information in manifests lists
+ * 2. Prune data files based on information in manifests
  *
- * For the first level the triat PruningStatistics is implemented for the DataFusionTable.
- * It returns the pruning information for the manifest files
+ * For the first level the trait [`PruningStatistics`] is implemented for the DataFusionTable. It returns the pruning information for the manifest files
  * and not the final data files.
  *
- * For the second level the trait PruningStatistics is implemented for the ManifestFile
+ * For the second level the trait PruningStatistics is implemented for the Manifest
 */
 
 use std::any::Any;
@@ -25,33 +24,23 @@ use datafusion::{
     prelude::Column,
     scalar::ScalarValue,
 };
-use iceberg_rust_spec::spec::{
-    manifest::ManifestEntry, manifest_list::ManifestListEntry, partition::PartitionSpec,
+use iceberg_rust::spec::{
+    manifest::ManifestEntry, manifest_list::ManifestListEntry, partition::BoundPartitionField,
     schema::Schema,
 };
 
-/// A struct that holds information needed to prune manifest files based on the manifest list file.
-///
-/// This struct contains the schema, partition specification, and a list of manifest list entries.
-/// It is used to implement the `PruningStatistics` trait for pruning manifest files.
-pub struct PruneManifests<'table, 'manifests> {
-    schema: &'table Schema,
-    partition_spec: &'table PartitionSpec,
+pub(crate) struct PruneManifests<'table, 'manifests> {
+    partition_fields: &'table [BoundPartitionField<'table>],
     files: &'manifests [ManifestListEntry],
 }
 
 impl<'table, 'manifests> PruneManifests<'table, 'manifests> {
-    /// Creates a new `PruneManifests` struct that holds information needed to prune manifest files based on the manifest list file.
-    ///
-    /// This constructor takes the schema, partition specification, and a list of manifest list entries, and returns a new `PruneManifests` instance.
-    pub fn new(
-        schema: &'table Schema,
-        partition_spec: &'table PartitionSpec,
+    pub(crate) fn new(
+        partition_fields: &'table [BoundPartitionField<'table>],
         files: &'manifests [ManifestListEntry],
     ) -> Self {
         Self {
-            schema,
-            partition_spec,
+            partition_fields,
             files,
         }
     }
@@ -59,15 +48,13 @@ impl<'table, 'manifests> PruneManifests<'table, 'manifests> {
 
 impl<'table, 'manifests> PruningStatistics for PruneManifests<'table, 'manifests> {
     fn min_values(&self, column: &Column) -> Option<ArrayRef> {
-        let column = self.schema.fields().get_name(&column.name)?;
         let (index, partition_field) = self
-            .partition_spec
-            .fields()
+            .partition_fields
             .iter()
             .enumerate()
-            .find(|(_, partition_field)| partition_field.source_id() == &column.id)?;
-        let data_type = column
-            .field_type
+            .find(|(_, field)| field.source_name() == column.name())?;
+        let data_type = partition_field
+            .field_type()
             .tranform(partition_field.transform())
             .ok()?;
         let min_values = self.files.iter().filter_map(|manifest| {
@@ -81,15 +68,13 @@ impl<'table, 'manifests> PruningStatistics for PruneManifests<'table, 'manifests
         any_iter_to_array(min_values, &(&data_type).try_into().ok()?).ok()
     }
     fn max_values(&self, column: &Column) -> Option<ArrayRef> {
-        let column = self.schema.fields().get_name(&column.name)?;
         let (index, partition_field) = self
-            .partition_spec
-            .fields()
+            .partition_fields
             .iter()
             .enumerate()
-            .find(|(_, partition_field)| partition_field.source_id() == &column.id)?;
-        let data_type = column
-            .field_type
+            .find(|(_, field)| field.source_name() == column.name())?;
+        let data_type = partition_field
+            .field_type()
             .tranform(partition_field.transform())
             .ok()?;
         let max_values = self.files.iter().filter_map(|manifest| {
@@ -106,13 +91,11 @@ impl<'table, 'manifests> PruningStatistics for PruneManifests<'table, 'manifests
         self.files.len()
     }
     fn null_counts(&self, column: &Column) -> Option<ArrayRef> {
-        let column = self.schema.fields().get_name(&column.name)?;
         let (index, _) = self
-            .partition_spec
-            .fields()
+            .partition_fields
             .iter()
             .enumerate()
-            .find(|(_, partition_field)| partition_field.source_id() == &column.id)?;
+            .find(|(_, field)| field.source_name() == column.name())?;
         let contains_null = self.files.iter().filter_map(|manifest| {
             manifest.partitions.as_ref().map(|partitions| {
                 if !partitions[index].contains_null {
@@ -143,32 +126,14 @@ impl<'table, 'manifests> PruningStatistics for PruneManifests<'table, 'manifests
     }
 }
 
-/// A struct that holds the schema, arrow schema, and manifest entries for pruning data files.
-///
-/// This struct is used to perform various pruning operations on the data files, such as
-/// retrieving the minimum and maximum values for a given column, checking for null values,
-/// and determining which files contain specific values.
-pub struct PruneDataFiles<'table, 'manifests> {
+pub(crate) struct PruneDataFiles<'table, 'manifests> {
     schema: &'table Schema,
     arrow_schema: &'table ArrowSchema,
     files: &'manifests [ManifestEntry],
 }
 
 impl<'table, 'manifests> PruneDataFiles<'table, 'manifests> {
-    /// Constructs a new `PruneDataFiles` struct with the given schema, arrow schema, and manifest entries.
-    ///
-    /// This struct is used to perform various pruning operations on the data files, such as
-    /// retrieving the minimum and maximum values for a given column, checking for null values,
-    /// and determining which files contain specific values.
-    ///
-    /// # Arguments
-    /// - `schema`: The schema for the table.
-    /// - `arrow_schema`: The arrow schema for the table.
-    /// - `files`: The manifest entries for the data files.
-    ///
-    /// # Returns
-    /// A new `PruneDataFiles` struct.
-    pub fn new(
+    pub(crate) fn new(
         schema: &'table Schema,
         arrow_schema: &'table ArrowSchema,
         files: &'manifests [ManifestEntry],
@@ -194,7 +159,7 @@ impl<'table, 'manifests> PruningStatistics for PruneDataFiles<'table, 'manifests
                 .iter()
                 .map(|manifest| match &manifest.data_file().lower_bounds() {
                     Some(map) => map
-                        .get(&(column_id as i32))
+                        .get(&{ column_id })
                         .map(|value| value.clone().into_any()),
                     None => None,
                 });
@@ -212,7 +177,7 @@ impl<'table, 'manifests> PruningStatistics for PruneDataFiles<'table, 'manifests
                 .iter()
                 .map(|manifest| match &manifest.data_file().upper_bounds() {
                     Some(map) => map
-                        .get(&(column_id as i32))
+                        .get(&{ column_id })
                         .map(|value| value.clone().into_any()),
                     None => None,
                 });
@@ -227,7 +192,7 @@ impl<'table, 'manifests> PruningStatistics for PruneDataFiles<'table, 'manifests
             self.files
                 .iter()
                 .map(|manifest| match &manifest.data_file().null_value_counts() {
-                    Some(map) => map.get(&(column_id as i32)).copied(),
+                    Some(map) => map.get(&{ column_id }).copied(),
                     None => None,
                 });
         ScalarValue::iter_to_array(null_counts.map(ScalarValue::Int64)).ok()
@@ -246,7 +211,7 @@ impl<'table, 'manifests> PruningStatistics for PruneDataFiles<'table, 'manifests
             self.files
                 .iter()
                 .map(|manifest| match &manifest.data_file().value_counts() {
-                    Some(map) => map.get(&(column_id as i32)).copied(),
+                    Some(map) => map.get(&{ column_id }).copied(),
                     None => None,
                 });
         ScalarValue::iter_to_array(null_counts.map(ScalarValue::Int64)).ok()

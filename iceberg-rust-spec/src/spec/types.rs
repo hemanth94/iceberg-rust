@@ -185,7 +185,7 @@ impl fmt::Display for PrimitiveType {
 pub struct StructType {
     /// Struct fields
     #[builder(setter(each(name = "with_struct_field")))]
-    pub fields: Vec<StructField>,
+    fields: Vec<StructField>,
     /// Lookup for index by field id
     #[serde(skip_serializing)]
     #[builder(
@@ -271,6 +271,10 @@ impl StructType {
 
     pub fn len(&self) -> usize {
         self.fields.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.fields.is_empty()
     }
 
     pub fn iter(&self) -> Iter<'_, StructField> {

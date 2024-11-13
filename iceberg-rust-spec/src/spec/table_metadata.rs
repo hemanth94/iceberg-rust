@@ -11,6 +11,7 @@ use std::{
 
 use crate::{
     error::Error,
+    partition::BoundPartitionField,
     spec::{
         partition::PartitionSpec,
         sort::{self, SortOrder},
@@ -33,6 +34,15 @@ pub static MAIN_BRANCH: &str = "main";
 static DEFAULT_SORT_ORDER_ID: i32 = 0;
 static DEFAULT_SPEC_ID: i32 = 0;
 
+// Properties
+
+pub const WRITE_PARQUET_COMPRESSION_CODEC: &str = "write.parquet.compression-codec";
+pub const WRITE_PARQUET_COMPRESSION_LEVEL: &str = "write.parquet.compression-level";
+pub const WRITE_OBJECT_STORAGE_ENABLED: &str = "write.object-storage.enabled";
+pub const WRITE_DATA_PATH: &str = "write.data.path";
+
+pub use _serde::{TableMetadataV1, TableMetadataV2};
+
 use _serde::TableMetadataEnum;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default, Builder)]
@@ -52,7 +62,7 @@ pub struct TableMetadata {
     /// The tables highest sequence number
     pub last_sequence_number: i64,
     #[builder(
-        default = "SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64"
+        default = "SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros() as i64"
     )]
     /// Timestamp in milliseconds from the unix epoch when the table was last updated.
     pub last_updated_ms: i64,
@@ -139,6 +149,7 @@ impl TableMetadata {
             .get(&schema_id)
             .ok_or_else(|| Error::InvalidFormat("schema".to_string()))
     }
+
     /// Get schema for snapshot
     #[inline]
     pub fn schema(&self, snapshot_id: i64) -> Result<&Schema, Error> {
@@ -151,12 +162,54 @@ impl TableMetadata {
             .get(&schema_id)
             .ok_or_else(|| Error::InvalidFormat("schema".to_string()))
     }
+
     /// Get default partition spec
     #[inline]
     pub fn default_partition_spec(&self) -> Result<&PartitionSpec, Error> {
         self.partition_specs
             .get(&self.default_spec_id)
             .ok_or_else(|| Error::InvalidFormat("partition spec".to_string()))
+    }
+
+    /// Get partition fields
+    pub fn current_partition_fields(
+        &self,
+        branch: Option<&str>,
+    ) -> Result<Vec<BoundPartitionField>, Error> {
+        let schema = self.current_schema(branch)?;
+        self.default_partition_spec()?
+            .fields()
+            .iter()
+            .map(|partition_field| {
+                let field =
+                    schema
+                        .get(*partition_field.source_id() as usize)
+                        .ok_or(Error::NotFound(
+                            "Field".to_owned(),
+                            partition_field.source_id().to_string(),
+                        ))?;
+                Ok(BoundPartitionField::new(partition_field, field))
+            })
+            .collect()
+    }
+
+    /// Get partition fields for snapshot
+    pub fn partition_fields(&self, snapshot_id: i64) -> Result<Vec<BoundPartitionField>, Error> {
+        let schema = self.schema(snapshot_id)?;
+        self.default_partition_spec()?
+            .fields()
+            .iter()
+            .map(|partition_field| {
+                let field =
+                    schema
+                        .get(*partition_field.source_id() as usize)
+                        .ok_or(Error::NotFound(
+                            "Field".to_owned(),
+                            partition_field.source_id().to_string(),
+                        ))?;
+                Ok(BoundPartitionField::new(partition_field, field))
+            })
+            .collect()
     }
 
     /// Get current snapshot
@@ -220,9 +273,17 @@ impl TableMetadata {
             }
         }
     }
+
+    /// Get sequence_number of snapshot
+    pub fn sequence_number(&self, snapshot_id: i64) -> Option<i64> {
+        self.snapshots
+            .get(&snapshot_id)
+            .map(|x| *x.sequence_number())
+    }
 }
 
-pub fn new_metadata_location(metadata: TabularMetadataRef<'_>) -> String {
+pub fn new_metadata_location<'a, T: Into<TabularMetadataRef<'a>>>(metadata: T) -> String {
+    let metadata: TabularMetadataRef = metadata.into();
     let transaction_uuid = Uuid::new_v4();
     let version = metadata.sequence_number();
 
@@ -239,7 +300,7 @@ impl fmt::Display for TableMetadata {
         write!(
             f,
             "{}",
-            &serde_json::to_string(self).map_err(|_| fmt::Error::default())?,
+            &serde_json::to_string(self).map_err(|_| fmt::Error)?,
         )
     }
 }
@@ -251,7 +312,7 @@ impl str::FromStr for TableMetadata {
     }
 }
 
-mod _serde {
+pub mod _serde {
     use std::collections::HashMap;
 
     use itertools::Itertools;
@@ -289,7 +350,7 @@ mod _serde {
     #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
     #[serde(rename_all = "kebab-case")]
     /// Fields for the version 2 of the table metadata.
-    pub(crate) struct TableMetadataV2 {
+    pub struct TableMetadataV2 {
         /// Integer Version for the format.
         pub format_version: VersionNumber<2>,
         /// A UUID that identifies the table
@@ -362,7 +423,7 @@ mod _serde {
     #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
     #[serde(rename_all = "kebab-case")]
     /// Fields for the version 1 of the table metadata.
-    pub(super) struct TableMetadataV1 {
+    pub struct TableMetadataV1 {
         /// Integer Version for the format.
         pub format_version: VersionNumber<1>,
         /// A UUID that identifies the table
@@ -721,7 +782,7 @@ pub struct SnapshotLog {
     pub timestamp_ms: i64,
 }
 
-#[derive(Debug, Serialize_repr, Deserialize_repr, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize_repr, Deserialize_repr, PartialEq, Eq, Clone, Copy)]
 #[repr(u8)]
 /// Iceberg format version
 #[derive(Default)]
@@ -736,11 +797,9 @@ pub enum FormatVersion {
 impl TryFrom<u8> for FormatVersion {
     type Error = Error;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match char::from_u32(value as u32)
-            .ok_or_else(|| Error::Conversion("u8".to_string(), "char".to_string()))?
-        {
-            '1' => Ok(FormatVersion::V1),
-            '2' => Ok(FormatVersion::V2),
+        match value {
+            1 => Ok(FormatVersion::V1),
+            2 => Ok(FormatVersion::V2),
             _ => Err(Error::Conversion(
                 "u8".to_string(),
                 "format version".to_string(),
@@ -768,7 +827,7 @@ mod tests {
     use crate::{
         error::Error,
         spec::{
-            partition::{PartitionField, PartitionSpecBuilder, Transform},
+            partition::{PartitionField, PartitionSpec, Transform},
             schema::SchemaBuilder,
             snapshot::{Operation, SnapshotBuilder, SnapshotReference, SnapshotRetention, Summary},
             sort::{NullOrder, SortDirection, SortField, SortOrderBuilder},
@@ -1052,8 +1111,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let partition_spec = PartitionSpecBuilder::default()
-            .with_spec_id(0)
+        let partition_spec = PartitionSpec::builder()
             .with_partition_field(PartitionField::new(1, 1000, "x", Transform::Identity))
             .build()
             .unwrap();
@@ -1184,8 +1242,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let partition_spec = PartitionSpecBuilder::default()
-            .with_spec_id(0)
+        let partition_spec = PartitionSpec::builder()
             .with_partition_field(PartitionField::new(1, 1000, "x", Transform::Identity))
             .build()
             .unwrap();
@@ -1268,8 +1325,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let partition_spec = PartitionSpecBuilder::default()
-            .with_spec_id(0)
+        let partition_spec = PartitionSpec::builder()
             .with_partition_field(PartitionField::new(1, 1000, "x", Transform::Identity))
             .build()
             .unwrap();

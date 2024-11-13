@@ -1,9 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use iceberg_rust_spec::spec::{
-    materialized_view_metadata::{depends_on_tables_from_string, SourceTable},
-    snapshot::DEPENDS_ON_TABLES,
-};
+use iceberg_rust_spec::materialized_view_metadata::{RefreshState, REFRESH_STATE};
 
 use crate::{error::Error, table::Table};
 
@@ -28,15 +25,23 @@ impl StorageTable {
     }
 
     #[inline]
-    pub async fn source_tables(
+    pub async fn refresh_state(
         &self,
+        version_id: i64,
         branch: Option<String>,
-    ) -> Result<Option<Vec<SourceTable>>, Error> {
-        self.metadata()
-            .current_snapshot(branch.as_deref())?
-            .and_then(|snapshot| snapshot.summary().other.get(DEPENDS_ON_TABLES))
-            .map(|x| depends_on_tables_from_string(x))
-            .transpose()
-            .map_err(Error::from)
+    ) -> Result<Option<RefreshState>, Error> {
+        let current_snapshot = self.metadata().current_snapshot(branch.as_deref())?;
+        let refresh_state = current_snapshot
+            .and_then(|snapshot| snapshot.summary().other.get(REFRESH_STATE))
+            .map(|x| serde_json::from_str::<RefreshState>(x))
+            .transpose()?;
+        let Some(refresh_state) = refresh_state else {
+            return Ok(None);
+        };
+        if version_id == refresh_state.refresh_version_id {
+            Ok(Some(refresh_state))
+        } else {
+            Ok(None)
+        }
     }
 }

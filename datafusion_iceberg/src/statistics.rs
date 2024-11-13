@@ -5,12 +5,13 @@ use datafusion::{
     physical_plan::{ColumnStatistics, Statistics},
     scalar::ScalarValue,
 };
-use iceberg_rust::{catalog::tabular::Tabular, table::Table};
-use iceberg_rust_spec::spec::{
+use futures::{future, TryFutureExt, TryStreamExt};
+use iceberg_rust::spec::{
     manifest::{ManifestEntry, Status},
     schema::Schema,
     values::Value,
 };
+use iceberg_rust::{catalog::tabular::Tabular, table::Table};
 
 use crate::error::Error;
 
@@ -18,8 +19,7 @@ use super::table::DataFusionTable;
 
 impl DataFusionTable {
     pub(crate) async fn statistics(&self) -> Result<Statistics, Error> {
-        let table_read = self.tabular.read().await;
-        match table_read.deref() {
+        match self.tabular.read().await.deref() {
             Tabular::Table(table) => table_statistics(table, &self.snapshot_range).await,
             Tabular::View(_) => Err(Error::NotSupported("Statistics for views".to_string())),
             Tabular::MaterializedView(mv) => {
@@ -34,60 +34,53 @@ pub(crate) async fn table_statistics(
     table: &Table,
     snapshot_range: &(Option<i64>, Option<i64>),
 ) -> Result<Statistics, Error> {
-    let schema = snapshot_range
+    let schema = &snapshot_range
         .1
         .and_then(|snapshot_id| table.metadata().schema(snapshot_id).ok().cloned())
         .unwrap_or_else(|| table.current_schema(None).unwrap().clone());
     let manifests = table.manifests(snapshot_range.0, snapshot_range.1).await?;
     let datafiles = table.datafiles(&manifests, None).await?;
-    let file_groups: Vec<ManifestEntry> = datafiles
-        .into_iter()
-        .filter(|manifest| {
-            if *manifest.status() == Status::Deleted {
-                false
-            } else {
-                true
-            }
-        })
-        .collect();
-
-    Ok(file_groups.iter().fold(
-        Statistics {
-            num_rows: Precision::Exact(0),
-            total_byte_size: Precision::Exact(0),
-            column_statistics: vec![
-                ColumnStatistics {
-                    null_count: Precision::Absent,
-                    max_value: Precision::Absent,
-                    min_value: Precision::Absent,
-                    distinct_count: Precision::Absent
-                };
-                schema.fields().len()
-            ],
-        },
-        |acc, manifest| {
-            let column_stats = column_statistics(&schema, manifest);
+    datafiles
+        .try_filter(|manifest| future::ready(!matches!(manifest.status(), Status::Deleted)))
+        .try_fold(
             Statistics {
-                num_rows: acc.num_rows.add(&Precision::Exact(
-                    *manifest.data_file().record_count() as usize
-                )),
-                total_byte_size: acc.total_byte_size.add(&Precision::Exact(
-                    *manifest.data_file().file_size_in_bytes() as usize,
-                )),
-                column_statistics: acc
-                    .column_statistics
-                    .into_iter()
-                    .zip(column_stats)
-                    .map(|(acc, x)| ColumnStatistics {
-                        null_count: acc.null_count.add(&x.null_count),
-                        max_value: acc.max_value.max(&x.max_value),
-                        min_value: acc.min_value.min(&x.min_value),
-                        distinct_count: acc.distinct_count.add(&x.distinct_count),
-                    })
-                    .collect(),
-            }
-        },
-    ))
+                num_rows: Precision::Exact(0),
+                total_byte_size: Precision::Exact(0),
+                column_statistics: vec![
+                    ColumnStatistics {
+                        null_count: Precision::Absent,
+                        max_value: Precision::Absent,
+                        min_value: Precision::Absent,
+                        distinct_count: Precision::Absent
+                    };
+                    schema.fields().len()
+                ],
+            },
+            |acc, manifest| async move {
+                let column_stats = column_statistics(schema, &manifest);
+                Ok(Statistics {
+                    num_rows: acc.num_rows.add(&Precision::Exact(
+                        *manifest.data_file().record_count() as usize,
+                    )),
+                    total_byte_size: acc.total_byte_size.add(&Precision::Exact(
+                        *manifest.data_file().file_size_in_bytes() as usize,
+                    )),
+                    column_statistics: acc
+                        .column_statistics
+                        .into_iter()
+                        .zip(column_stats)
+                        .map(|(acc, x)| ColumnStatistics {
+                            null_count: acc.null_count.add(&x.null_count),
+                            max_value: acc.max_value.max(&x.max_value),
+                            min_value: acc.min_value.min(&x.min_value),
+                            distinct_count: acc.distinct_count.add(&x.distinct_count),
+                        })
+                        .collect(),
+                })
+            },
+        )
+        .map_err(Error::from)
+        .await
 }
 
 fn column_statistics<'a>(

@@ -2,15 +2,19 @@
  * Value in iceberg
  */
 
+use core::panic;
 use std::{
     any::Any,
-    collections::{BTreeMap, HashMap},
+    collections::{btree_map::Keys, BTreeMap, HashMap},
     fmt,
+    hash::{DefaultHasher, Hash, Hasher},
     io::Cursor,
+    ops::Sub,
     slice::Iter,
 };
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
+use itertools::Itertools;
 use ordered_float::OrderedFloat;
 use rust_decimal::Decimal;
 use serde::{
@@ -128,7 +132,7 @@ impl fmt::Display for Value {
 /// The partition struct stores the tuple of partition values for each file.
 /// Its type is derived from the partition fields of the partition spec used to write the manifest file.
 /// In v2, the partition struct’s field ids must match the ids from the partition spec.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Eq, PartialOrd, Ord)]
 pub struct Struct {
     /// Vector to store the field values
     pub fields: Vec<Option<Value>>,
@@ -150,6 +154,10 @@ impl Struct {
         self.fields.iter()
     }
 
+    pub fn keys(&self) -> Keys<'_, String, usize> {
+        self.lookup.keys()
+    }
+
     pub(crate) fn cast(
         self,
         schema: &StructType,
@@ -167,7 +175,7 @@ impl Struct {
                 )?;
 
                 Ok((
-                    field.name.clone(),
+                    partition_field.name().clone(),
                     field.field_type.tranform(partition_field.transform())?,
                 ))
             })
@@ -188,7 +196,7 @@ impl Struct {
                     // Get datatype after tranform
                     let datatype = map
                         .get(name)
-                        .ok_or(Error::InvalidFormat("schema".to_string()))?;
+                        .ok_or(Error::InvalidFormat("partition_struct".to_string()))?;
                     // Cast the value to the datatype
                     let value = field.map(|value| value.cast(datatype)).transpose()?;
                     Ok((name.clone(), value))
@@ -260,6 +268,21 @@ impl<'de> Deserialize<'de> for Struct {
             Box::leak(vec![].into_boxed_slice()),
             PartitionStructVisitor,
         )
+    }
+}
+
+impl PartialEq for Struct {
+    fn eq(&self, other: &Self) -> bool {
+        self.keys().all(|key| self.get(key).eq(&other.get(key)))
+    }
+}
+
+impl Hash for Struct {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        for key in self.keys().sorted() {
+            key.hash(state);
+            self.get(key).hash(state);
+        }
     }
 }
 
@@ -520,7 +543,7 @@ impl Value {
                         |field| {
                             (
                                 field.name.clone(),
-                                object.remove(&field.id.to_string()).and_then(|value| {
+                                object.remove(&field.name).and_then(|value| {
                                     Value::try_from_json(value, &field.field_type)
                                         .and_then(|value| {
                                             value.ok_or(Error::InvalidFormat(
@@ -804,5 +827,391 @@ mod datetime {
                 .unwrap()
                 .naive_utc(),
         )
+    }
+}
+
+pub trait TrySub: Sized {
+    fn try_sub(&self, other: &Self) -> Result<Self, Error>;
+}
+
+impl<T: Sub<Output = T> + Copy> TrySub for T {
+    fn try_sub(&self, other: &Self) -> Result<Self, Error> {
+        Ok(*self - *other)
+    }
+}
+
+impl TrySub for Value {
+    fn try_sub(&self, other: &Self) -> Result<Self, Error> {
+        match (self, other) {
+            (Value::Int(own), Value::Int(other)) => Ok(Value::Int(own - other)),
+            (Value::LongInt(own), Value::LongInt(other)) => Ok(Value::LongInt(own - other)),
+            (Value::Float(own), Value::Float(other)) => Ok(Value::Float(*own - *other)),
+            (Value::Double(own), Value::Double(other)) => Ok(Value::Double(*own - *other)),
+            (Value::Date(own), Value::Date(other)) => Ok(Value::Date(own - other)),
+            (Value::Time(own), Value::Time(other)) => Ok(Value::Time(own - other)),
+            (Value::Timestamp(own), Value::Timestamp(other)) => Ok(Value::Timestamp(own - other)),
+            (Value::TimestampTZ(own), Value::TimestampTZ(other)) => {
+                Ok(Value::TimestampTZ(own - other))
+            }
+            (Value::String(own), Value::String(other)) => {
+                Ok(Value::LongInt(sub_string(own, other) as i64))
+            }
+            (Value::UUID(own), Value::UUID(other)) => {
+                let (own1, own2, own3, own4) = own.to_fields_le();
+                let (other1, other2, other3, other4) = other.to_fields_le();
+                let mut sub4 = [0; 8];
+                for i in 0..own4.len() {
+                    sub4[i] = own4[i] - other4[i];
+                }
+                Ok(Value::UUID(Uuid::from_fields_le(
+                    own1 - other1,
+                    own2 - other2,
+                    own3 - other3,
+                    &sub4,
+                )))
+            }
+            (Value::Fixed(own_size, own), Value::Fixed(other_size, other)) => Ok(Value::Fixed(
+                if own_size <= other_size {
+                    *own_size
+                } else if own_size > other_size {
+                    *other_size
+                } else {
+                    panic!("Size must be either smaller, equal or larger");
+                },
+                own.iter()
+                    .zip(other.iter())
+                    .map(|(own, other)| own - other)
+                    .collect(),
+            )),
+            (x, y) => Err(Error::Type(
+                x.datatype().to_string(),
+                y.datatype().to_string(),
+            )),
+        }
+    }
+}
+
+fn sub_string(left: &str, right: &str) -> u64 {
+    if let Some(distance) = left
+        .chars()
+        .zip(right.chars())
+        .take(256)
+        .skip_while(|(l, r)| l == r)
+        .try_fold(0, |acc, (l, r)| {
+            if let (Some(l), Some(r)) = (l.to_digit(36), r.to_digit(36)) {
+                Some(acc + (l - r).pow(2))
+            } else {
+                None
+            }
+        })
+    {
+        distance as u64
+    } else {
+        let mut hasher = DefaultHasher::new();
+        hasher.write(left.as_bytes());
+        let left = hasher.finish();
+        hasher.write(right.as_bytes());
+        let right = hasher.finish();
+        left - right
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use crate::{
+        spec::types::{ListType, MapType, StructType},
+        types::StructField,
+    };
+
+    use super::*;
+
+    fn check_json_serde(json: &str, expected_literal: Value, expected_type: &Type) {
+        let raw_json_value = serde_json::from_str::<JsonValue>(json).unwrap();
+        let desered_literal = Value::try_from_json(raw_json_value.clone(), expected_type).unwrap();
+        assert_eq!(desered_literal, Some(expected_literal.clone()));
+
+        let expected_json_value: JsonValue = (&expected_literal).into();
+        let sered_json = serde_json::to_string(&expected_json_value).unwrap();
+        let parsed_json_value = serde_json::from_str::<JsonValue>(&sered_json).unwrap();
+
+        assert_eq!(parsed_json_value, raw_json_value);
+    }
+
+    fn check_avro_bytes_serde(input: Vec<u8>, expected_literal: Value, expected_type: &Type) {
+        let raw_schema = r#""bytes""#;
+        let schema = apache_avro::Schema::parse_str(raw_schema).unwrap();
+
+        let bytes = ByteBuf::from(input);
+        let literal = Value::try_from_bytes(&bytes, expected_type).unwrap();
+        assert_eq!(literal, expected_literal);
+
+        let mut writer = apache_avro::Writer::new(&schema, Vec::new());
+        writer.append_ser(bytes).unwrap();
+        let encoded = writer.into_inner().unwrap();
+        let reader = apache_avro::Reader::new(&*encoded).unwrap();
+
+        for record in reader {
+            let result = apache_avro::from_value::<ByteBuf>(&record.unwrap()).unwrap();
+            let desered_literal = Value::try_from_bytes(&result, expected_type).unwrap();
+            assert_eq!(desered_literal, expected_literal);
+        }
+    }
+
+    #[test]
+    fn json_boolean() {
+        let record = r#"true"#;
+
+        check_json_serde(
+            record,
+            Value::Boolean(true),
+            &Type::Primitive(PrimitiveType::Boolean),
+        );
+    }
+
+    #[test]
+    fn json_int() {
+        let record = r#"32"#;
+
+        check_json_serde(record, Value::Int(32), &Type::Primitive(PrimitiveType::Int));
+    }
+
+    #[test]
+    fn json_long() {
+        let record = r#"32"#;
+
+        check_json_serde(
+            record,
+            Value::LongInt(32),
+            &Type::Primitive(PrimitiveType::Long),
+        );
+    }
+
+    #[test]
+    fn json_float() {
+        let record = r#"1.0"#;
+
+        check_json_serde(
+            record,
+            Value::Float(OrderedFloat(1.0)),
+            &Type::Primitive(PrimitiveType::Float),
+        );
+    }
+
+    #[test]
+    fn json_double() {
+        let record = r#"1.0"#;
+
+        check_json_serde(
+            record,
+            Value::Double(OrderedFloat(1.0)),
+            &Type::Primitive(PrimitiveType::Double),
+        );
+    }
+
+    #[test]
+    fn json_date() {
+        let record = r#""2017-11-16""#;
+
+        check_json_serde(
+            record,
+            Value::Date(17486),
+            &Type::Primitive(PrimitiveType::Date),
+        );
+    }
+
+    #[test]
+    fn json_time() {
+        let record = r#""22:31:08.123456""#;
+
+        check_json_serde(
+            record,
+            Value::Time(81068123456),
+            &Type::Primitive(PrimitiveType::Time),
+        );
+    }
+
+    #[test]
+    fn json_timestamp() {
+        let record = r#""2017-11-16T22:31:08.123456""#;
+
+        check_json_serde(
+            record,
+            Value::Timestamp(1510871468123456),
+            &Type::Primitive(PrimitiveType::Timestamp),
+        );
+    }
+
+    #[test]
+    fn json_timestamptz() {
+        let record = r#""2017-11-16T22:31:08.123456+00:00""#;
+
+        check_json_serde(
+            record,
+            Value::TimestampTZ(1510871468123456),
+            &Type::Primitive(PrimitiveType::Timestamptz),
+        );
+    }
+
+    #[test]
+    fn json_string() {
+        let record = r#""iceberg""#;
+
+        check_json_serde(
+            record,
+            Value::String("iceberg".to_string()),
+            &Type::Primitive(PrimitiveType::String),
+        );
+    }
+
+    #[test]
+    fn json_uuid() {
+        let record = r#""f79c3e09-677c-4bbd-a479-3f349cb785e7""#;
+
+        check_json_serde(
+            record,
+            Value::UUID(Uuid::parse_str("f79c3e09-677c-4bbd-a479-3f349cb785e7").unwrap()),
+            &Type::Primitive(PrimitiveType::Uuid),
+        );
+    }
+
+    #[test]
+    fn json_struct() {
+        let record = r#"{"id": 1, "name": "bar", "address": null}"#;
+
+        check_json_serde(
+            record,
+            Value::Struct(Struct::from_iter(vec![
+                ("id".to_string(), Some(Value::Int(1))),
+                ("name".to_string(), Some(Value::String("bar".to_string()))),
+                ("address".to_string(), None),
+            ])),
+            &Type::Struct(StructType::new(vec![
+                StructField {
+                    id: 1,
+                    name: "id".to_string(),
+                    required: true,
+                    field_type: Type::Primitive(PrimitiveType::Int),
+                    doc: None,
+                },
+                StructField {
+                    id: 2,
+                    name: "name".to_string(),
+                    required: false,
+                    field_type: Type::Primitive(PrimitiveType::String),
+                    doc: None,
+                },
+                StructField {
+                    id: 3,
+                    name: "address".to_string(),
+                    required: false,
+                    field_type: Type::Primitive(PrimitiveType::String),
+                    doc: None,
+                },
+            ])),
+        );
+    }
+
+    #[test]
+    fn json_list() {
+        let record = r#"[1, 2, 3, null]"#;
+
+        check_json_serde(
+            record,
+            Value::List(vec![
+                Some(Value::Int(1)),
+                Some(Value::Int(2)),
+                Some(Value::Int(3)),
+                None,
+            ]),
+            &Type::List(ListType {
+                element_id: 0,
+                element_required: true,
+                element: Box::new(Type::Primitive(PrimitiveType::Int)),
+            }),
+        );
+    }
+
+    #[test]
+    fn json_map() {
+        let record = r#"{ "keys": ["a", "b", "c"], "values": [1, 2, null] }"#;
+
+        check_json_serde(
+            record,
+            Value::Map(BTreeMap::from([
+                (Value::String("a".to_string()), Some(Value::Int(1))),
+                (Value::String("b".to_string()), Some(Value::Int(2))),
+                (Value::String("c".to_string()), None),
+            ])),
+            &Type::Map(MapType {
+                key_id: 0,
+                key: Box::new(Type::Primitive(PrimitiveType::String)),
+                value_id: 1,
+                value: Box::new(Type::Primitive(PrimitiveType::Int)),
+                value_required: true,
+            }),
+        );
+    }
+
+    #[test]
+    fn avro_bytes_boolean() {
+        let bytes = vec![1u8];
+
+        check_avro_bytes_serde(
+            bytes,
+            Value::Boolean(true),
+            &Type::Primitive(PrimitiveType::Boolean),
+        );
+    }
+
+    #[test]
+    fn avro_bytes_int() {
+        let bytes = vec![32u8, 0u8, 0u8, 0u8];
+
+        check_avro_bytes_serde(bytes, Value::Int(32), &Type::Primitive(PrimitiveType::Int));
+    }
+
+    #[test]
+    fn avro_bytes_long() {
+        let bytes = vec![32u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8];
+
+        check_avro_bytes_serde(
+            bytes,
+            Value::LongInt(32),
+            &Type::Primitive(PrimitiveType::Long),
+        );
+    }
+
+    #[test]
+    fn avro_bytes_float() {
+        let bytes = vec![0u8, 0u8, 128u8, 63u8];
+
+        check_avro_bytes_serde(
+            bytes,
+            Value::Float(OrderedFloat(1.0)),
+            &Type::Primitive(PrimitiveType::Float),
+        );
+    }
+
+    #[test]
+    fn avro_bytes_double() {
+        let bytes = vec![0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 240u8, 63u8];
+
+        check_avro_bytes_serde(
+            bytes,
+            Value::Double(OrderedFloat(1.0)),
+            &Type::Primitive(PrimitiveType::Double),
+        );
+    }
+
+    #[test]
+    fn avro_bytes_string() {
+        let bytes = vec![105u8, 99u8, 101u8, 98u8, 101u8, 114u8, 103u8];
+
+        check_avro_bytes_serde(
+            bytes,
+            Value::String("iceberg".to_string()),
+            &Type::Primitive(PrimitiveType::String),
+        );
     }
 }

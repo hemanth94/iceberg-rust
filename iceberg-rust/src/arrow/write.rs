@@ -5,22 +5,21 @@
 use futures::{
     channel::mpsc::{channel, unbounded, Receiver, Sender},
     lock::Mutex,
-    stream, SinkExt, StreamExt, TryStreamExt,
+    SinkExt, StreamExt, TryStreamExt,
 };
-use object_store::ObjectStore;
+use object_store::{buffered::BufWriter, ObjectStore};
+use std::fmt::Write;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
 };
-use tokio::io::AsyncWrite;
 
 use arrow::{datatypes::Schema as ArrowSchema, error::ArrowError, record_batch::RecordBatch};
 use futures::Stream;
 use iceberg_rust_spec::{
-    spec::{
-        manifest::DataFile, partition::PartitionSpec, schema::Schema,
-        table_metadata::TableMetadata, values::Value,
-    },
+    partition::BoundPartitionField,
+    spec::{manifest::DataFile, schema::Schema, table_metadata::TableMetadata, values::Value},
+    table_metadata::{WRITE_DATA_PATH, WRITE_OBJECT_STORAGE_ENABLED},
     util::strip_prefix,
 };
 use parquet::{
@@ -30,9 +29,7 @@ use parquet::{
 };
 use uuid::Uuid;
 
-use crate::{
-    catalog::bucket::parse_bucket, error::Error, file_format::parquet::parquet_to_datafile,
-};
+use crate::{catalog::bucket::Bucket, error::Error, file_format::parquet::parquet_to_datafile};
 
 use super::partition::partition_record_batches;
 
@@ -45,39 +42,81 @@ pub async fn write_parquet_partitioned(
     object_store: Arc<dyn ObjectStore>,
     branch: Option<&str>,
 ) -> Result<Vec<DataFile>, ArrowError> {
-    let location = &metadata.location;
     let schema = metadata.current_schema(branch).map_err(Error::from)?;
-    let partition_spec = metadata.default_partition_spec().map_err(Error::from)?;
+    let partition_fields = &metadata
+        .current_partition_fields(branch)
+        .map_err(Error::from)?;
 
-    let streams = partition_record_batches(batches, partition_spec, schema).await?;
+    let data_location = &metadata
+        .properties
+        .get(WRITE_DATA_PATH)
+        .map(ToOwned::to_owned)
+        .unwrap_or(metadata.location.clone() + "/data/");
 
     let arrow_schema: Arc<ArrowSchema> =
         Arc::new((schema.fields()).try_into().map_err(Error::from)?);
 
-    let (sender, reciever) = unbounded();
+    let (mut sender, reciever) = unbounded();
 
-    stream::iter(streams.into_iter())
-        .map(Ok::<_, ArrowError>)
-        .try_for_each_concurrent(None, |(partition_values, batches)| {
-            let arrow_schema = arrow_schema.clone();
-            let object_store = object_store.clone();
-            let mut sender = sender.clone();
-            async move {
-                let files = write_parquet_files(
-                    location,
-                    schema,
-                    &arrow_schema,
-                    partition_spec,
-                    &partition_values,
-                    batches,
-                    object_store.clone(),
-                )
-                .await?;
-                sender.send(files).await.map_err(Error::from)?;
-                Ok(())
-            }
-        })
+    if partition_fields.is_empty() {
+        let partition_path = if metadata
+            .properties
+            .get(WRITE_OBJECT_STORAGE_ENABLED)
+            .is_some_and(|x| x == "true")
+        {
+            Some("".to_owned())
+        } else {
+            None
+        };
+        let files = write_parquet_files(
+            data_location,
+            schema,
+            &arrow_schema,
+            partition_fields,
+            partition_path,
+            batches,
+            object_store.clone(),
+        )
         .await?;
+        sender.send(files).await.map_err(Error::from)?;
+    } else {
+        let streams = partition_record_batches(batches, partition_fields).await?;
+
+        streams
+            .map(Ok::<_, ArrowError>)
+            .try_for_each_concurrent(None, |(partition_values, batches)| {
+                let arrow_schema = arrow_schema.clone();
+                let object_store = object_store.clone();
+                let mut sender = sender.clone();
+                async move {
+                    let partition_path = if metadata
+                        .properties
+                        .get(WRITE_OBJECT_STORAGE_ENABLED)
+                        .is_some_and(|x| x == "true")
+                    {
+                        None
+                    } else {
+                        Some(generate_partition_path(
+                            partition_fields,
+                            &partition_values,
+                        )?)
+                    };
+                    let files = write_parquet_files(
+                        data_location,
+                        schema,
+                        &arrow_schema,
+                        partition_fields,
+                        partition_path,
+                        batches,
+                        object_store.clone(),
+                    )
+                    .await?;
+                    sender.send(files).await.map_err(Error::from)?;
+                    Ok(())
+                }
+            })
+            .await?;
+    }
 
     sender.close_channel();
 
@@ -89,25 +128,29 @@ pub async fn write_parquet_partitioned(
         .await)
 }
 
-type SendableAsyncArrowWriter = AsyncArrowWriter<Box<dyn AsyncWrite + Send + Unpin>>;
+type SendableAsyncArrowWriter = AsyncArrowWriter<BufWriter>;
 type ArrowSender = Sender<(String, SendableAsyncArrowWriter)>;
 type ArrowReciever = Receiver<(String, SendableAsyncArrowWriter)>;
 
 /// Write arrow record batches to parquet files. Does not perform any operation on an iceberg table.
 async fn write_parquet_files(
-    location: &str,
+    data_location: &str,
     schema: &Schema,
     arrow_schema: &ArrowSchema,
-    partition_spec: &PartitionSpec,
-    partiton_values: &[Value],
+    partition_fields: &[BoundPartitionField<'_>],
+    partition_path: Option<String>,
     batches: impl Stream<Item = Result<RecordBatch, ArrowError>> + Send,
     object_store: Arc<dyn ObjectStore>,
 ) -> Result<Vec<DataFile>, ArrowError> {
-    let bucket = parse_bucket(location)?;
-    let partition_location =
-        generate_partition_location(location, partition_spec, partiton_values)?;
+    let bucket = Bucket::from_path(data_location)?;
     let current_writer = Arc::new(Mutex::new(
-        create_arrow_writer(&partition_location, arrow_schema, object_store.clone()).await?,
+        create_arrow_writer(
+            data_location,
+            partition_path.clone(),
+            arrow_schema,
+            object_store.clone(),
+        )
+        .await?,
     ));
 
     let (mut writer_sender, writer_reciever): (ArrowSender, ArrowReciever) = channel(32);
@@ -120,7 +163,7 @@ async fn write_parquet_files(
             let mut writer_sender = writer_sender.clone();
             let num_bytes = num_bytes.clone();
             let object_store = object_store.clone();
-            let partition_location = &partition_location;
+            let partition_path = partition_path.clone();
             async move {
                 let mut current_writer = current_writer.lock().await;
                 let current =
@@ -134,9 +177,14 @@ async fn write_parquet_files(
                 if current.is_ok() {
                     let finished_writer = std::mem::replace(
                         &mut *current_writer,
-                        create_arrow_writer(partition_location, arrow_schema, object_store)
-                            .await
-                            .unwrap(),
+                        create_arrow_writer(
+                            data_location,
+                            partition_path,
+                            arrow_schema,
+                            object_store,
+                        )
+                        .await
+                        .unwrap(),
                     );
                     writer_sender
                         .try_send(finished_writer)
@@ -172,7 +220,7 @@ async fn write_parquet_files(
                     size,
                     &metadata,
                     schema,
-                    partition_spec.fields(),
+                    partition_fields,
                 )?)
             }
         })
@@ -181,42 +229,45 @@ async fn write_parquet_files(
 }
 
 #[inline]
-fn generate_partition_location(
-    location: &str,
-    partition_spec: &PartitionSpec,
+fn generate_partition_path(
+    partition_fields: &[BoundPartitionField<'_>],
     partiton_values: &[Value],
 ) -> Result<String, ArrowError> {
-    let partition_location = strip_prefix(location)
-        + "/data/"
-        + &partition_spec
-            .fields()
-            .iter()
-            .zip(partiton_values.iter())
-            .map(|(spec, value)| {
-                let name = spec.name().clone();
-                Ok(name + "=" + &value.to_string() + "/")
-            })
-            .collect::<Result<String, ArrowError>>()?;
-    Ok(partition_location)
+    partition_fields
+        .iter()
+        .zip(partiton_values.iter())
+        .map(|(field, value)| {
+            let name = field.name().to_owned();
+            Ok(name + "=" + &value.to_string() + "/")
+        })
+        .collect::<Result<String, ArrowError>>()
 }
 
 async fn create_arrow_writer(
-    partition_location: &str,
+    data_location: &str,
+    partition_path: Option<String>,
     schema: &arrow::datatypes::Schema,
     object_store: Arc<dyn ObjectStore>,
-) -> Result<(String, AsyncArrowWriter<Box<dyn AsyncWrite + Send + Unpin>>), ArrowError> {
+) -> Result<(String, AsyncArrowWriter<BufWriter>), ArrowError> {
     let mut rand = [0u8; 6];
     getrandom::getrandom(&mut rand)
         .map_err(|err| ArrowError::ExternalError(Box::new(err)))
         .unwrap();
 
-    let parquet_path =
-        partition_location.to_string() + &Uuid::now_v1(&rand).to_string() + ".parquet";
+    let path = partition_path.unwrap_or_else(|| {
+        rand[0..3]
+            .iter()
+            .fold(String::with_capacity(8), |mut acc, x| {
+                write!(&mut acc, "{:x}", x).unwrap();
+                acc
+            })
+            + "/"
+    });
 
-    let (_, writer) = object_store
-        .put_multipart(&parquet_path.clone().into())
-        .await
-        .map_err(|err| ArrowError::from_external_error(err.into()))?;
+    let parquet_path =
+        strip_prefix(data_location) + &path + &Uuid::now_v1(&rand).to_string() + ".parquet";
+
+    let writer = BufWriter::new(object_store.clone(), parquet_path.clone().into());
 
     Ok((
         parquet_path,
@@ -244,25 +295,32 @@ fn record_batch_size(batch: &RecordBatch) -> usize {
 
 #[cfg(test)]
 mod tests {
+    use iceberg_rust_spec::{
+        partition::BoundPartitionField,
+        types::{StructField, Type},
+    };
+
     use crate::spec::{
-        partition::{PartitionField, PartitionSpec, Transform},
+        partition::{PartitionField, Transform},
         values::Value,
     };
 
     #[test]
     fn test_generate_partiton_location_success() {
-        let location = "s3://bucket/table";
-        let partition_spec = PartitionSpec::builder()
-            .with_spec_id(0)
-            .with_partition_field(PartitionField::new(1, 1001, "month", Transform::Month))
-            .build()
-            .unwrap();
+        let field = StructField {
+            id: 0,
+            name: "date".to_owned(),
+            required: false,
+            field_type: Type::Primitive(iceberg_rust_spec::types::PrimitiveType::Date),
+            doc: None,
+        };
+        let partfield = PartitionField::new(1, 1001, "month", Transform::Month);
+        let partition_fields = vec![BoundPartitionField::new(&partfield, &field)];
         let partiton_values = vec![Value::Int(10)];
 
-        let result =
-            super::generate_partition_location(location, &partition_spec, &partiton_values);
+        let result = super::generate_partition_path(&partition_fields, &partiton_values);
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "/table/data/month=10/");
+        assert_eq!(result.unwrap(), "month=10/");
     }
 }

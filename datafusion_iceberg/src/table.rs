@@ -4,7 +4,7 @@
 
 use async_trait::async_trait;
 use chrono::DateTime;
-use datafusion_expr::utils::conjunction;
+use datafusion_expr::{dml::InsertOp, utils::conjunction};
 use futures::TryStreamExt;
 use object_store::ObjectMeta;
 use std::{
@@ -13,71 +13,57 @@ use std::{
     fmt,
     ops::{Deref, DerefMut},
     sync::Arc,
-    vec,
 };
 use tokio::sync::{RwLock, RwLockWriteGuard};
 
 use datafusion::{
     arrow::datatypes::{Field, SchemaRef},
+    catalog::Session,
     common::{not_impl_err, plan_err, DataFusionError, SchemaExt},
     datasource::{
         file_format::{parquet::ParquetFormat, FileFormat},
         listing::PartitionedFile,
         object_store::ObjectStoreUrl,
         physical_plan::FileScanConfig,
-        provider::TableProvider,
-        ViewTable,
+        TableProvider, ViewTable,
     },
     execution::{context::SessionState, TaskContext},
     logical_expr::{TableProviderFilterPushDown, TableType},
-    physical_expr::{create_physical_expr, PhysicalExpr},
+    physical_expr::create_physical_expr,
     physical_optimizer::pruning::PruningPredicate,
     physical_plan::{
-        delete::DeleteSinkExec,
         insert::{DataSink, DataSinkExec},
         metrics::MetricsSet,
-        upsert::{OverwriteSink, UpdateSinkExec},
         DisplayAs, DisplayFormatType, ExecutionPlan, SendableRecordBatchStream, Statistics,
     },
     prelude::Expr,
     scalar::ScalarValue,
     sql::parser::DFParser,
 };
-use datafusion_expr::FilterOp;
 
-use crate::{error::Error, statistics::manifest_statistics};
-
-use iceberg_rust::{
-    arrow::write::write_parquet_partitioned,
-    catalog::tabular::Tabular,
-    materialized_view::MaterializedView,
-    table::pruning_statistics::{PruneDataFiles, PruneManifests},
-    table::Table,
-    view::View,
+use crate::{
+    error::Error,
+    pruning_statistics::{PruneDataFiles, PruneManifests},
+    statistics::manifest_statistics,
 };
-use iceberg_rust_spec::spec::{
-    manifest::Status,
+
+use iceberg_rust::spec::{
+    manifest::{ManifestEntry, Status},
+    util,
+};
+use iceberg_rust::spec::{
     schema::Schema,
     types::{StructField, StructType},
     view_metadata::ViewRepresentation,
 };
-use iceberg_rust_spec::util;
+use iceberg_rust::{
+    arrow::write::write_parquet_partitioned, catalog::tabular::Tabular,
+    materialized_view::MaterializedView, table::Table, view::View,
+};
 // mod value;
 
 #[derive(Debug, Clone)]
 /// Iceberg table for datafusion
-/// A struct representing an Iceberg table in the DataFusion runtime.
-///
-/// This struct holds the underlying Iceberg `Tabular` object, the schema of the table,
-/// the snapshot range (start and end versions), and the branch name.
-///
-/// The `tabular` field is an `Arc<RwLock<Tabular>>`, which allows concurrent access to the
-/// underlying Iceberg table. The `schema` field is a `SchemaRef`, which represents the
-/// schema of the table.
-///
-/// The `snapshot_range` field is a tuple of two optional `i64` values, representing the
-/// start and end versions of the table snapshot. The `branch` field is an optional `String`
-/// representing the branch name of the table.
 pub struct DataFusionTable {
     pub tabular: Arc<RwLock<Tabular>>,
     pub schema: SchemaRef,
@@ -163,25 +149,21 @@ impl TableProvider for DataFusionTable {
     fn as_any(&self) -> &dyn Any {
         &self.tabular
     }
-
     fn schema(&self) -> SchemaRef {
         self.schema.clone()
     }
-
     fn table_type(&self) -> TableType {
         TableType::Base
     }
-
     async fn scan(
         &self,
-        session: &SessionState,
+        session: &dyn Session,
         projection: Option<&Vec<usize>>,
         filters: &[Expr],
         limit: Option<usize>,
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
-        let table_state = self.tabular.read().await;
-
-        match table_state.deref() {
+        let session_state = session.as_any().downcast_ref::<SessionState>().unwrap();
+        match self.tabular.read().await.deref() {
             Tabular::View(view) => {
                 let metadata = view.metadata();
                 let version = self
@@ -193,7 +175,7 @@ impl TableProvider for DataFusionTable {
                     ViewRepresentation::Sql { sql, .. } => sql,
                 };
                 let statement = DFParser::new(sql)?.parse_statement()?;
-                let logical_plan = session.statement_to_plan(statement).await?;
+                let logical_plan = session_state.statement_to_plan(statement).await?;
                 ViewTable::try_new(logical_plan, Some(sql.clone()))?
                     .scan(session, projection, filters, limit)
                     .await
@@ -206,7 +188,7 @@ impl TableProvider for DataFusionTable {
                     &self.snapshot_range,
                     schema,
                     statistics,
-                    session,
+                    session_state,
                     projection,
                     filters,
                     limit,
@@ -222,7 +204,7 @@ impl TableProvider for DataFusionTable {
                     &self.snapshot_range,
                     schema,
                     statistics,
-                    session,
+                    session_state,
                     projection,
                     filters,
                     limit,
@@ -231,21 +213,20 @@ impl TableProvider for DataFusionTable {
             }
         }
     }
-
     async fn insert_into(
         &self,
-        _state: &SessionState,
+        _state: &dyn Session,
         input: Arc<dyn ExecutionPlan>,
-        overwrite: bool,
+        insert_op: InsertOp,
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
         // Create a physical plan from the logical plan.
         // Check that the schema of the plan matches the schema of this table.
         if !self.schema().equivalent_names_and_types(&input.schema()) {
             return plan_err!("Inserting query must have the same schema with the table.");
         }
-        if overwrite {
+        let InsertOp::Append = insert_op else {
             return not_impl_err!("Overwrite not implemented for MemoryTable yet");
-        }
+        };
         Ok(Arc::new(DataSinkExec::new(
             input,
             Arc::new(self.clone().into_data_sink()),
@@ -253,7 +234,6 @@ impl TableProvider for DataFusionTable {
             None,
         )))
     }
-
     fn supports_filters_pushdown(
         &self,
         filters: &[&Expr],
@@ -263,77 +243,9 @@ impl TableProvider for DataFusionTable {
             .map(|_| TableProviderFilterPushDown::Inexact)
             .collect())
     }
-
-    async fn update_table(
-        &self,
-        _state: &SessionState,
-        input_plan: Arc<dyn ExecutionPlan>,
-        overwrite: bool,
-    ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
-        // Create Physical Execution Plan for UPDATE node
-        // on top of Physical Execution Plan of child nodes
-
-        // Check that the schema of the plan matches the schema of this table.
-        if !self
-            .schema()
-            .equivalent_names_and_types(&input_plan.schema())
-        {
-            return plan_err!("Updating query must have the same schema with the table.");
-        }
-        if overwrite {
-            return not_impl_err!("Overwrite not implemented for MemoryTable yet");
-        }
-        // return Physical Execution Plan
-        Ok(Arc::new(UpdateSinkExec::new(
-            input_plan,
-            Arc::new(self.clone().into_data_sink()),
-            self.schema.clone(),
-            None,
-        )))
-    }
-
-    async fn delete_from_table(
-        &self,
-        _state: &SessionState,
-        input: Arc<dyn ExecutionPlan>,
-        overwrite: bool,
-    ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
-        // Create Physical Execution Plan for UPDATE node
-        // on top of Physical Execution Plan of child nodes
-
-        // Check that the schema of the plan matches the schema of this table.
-        if !self.schema().equivalent_names_and_types(&input.schema()) {
-            return plan_err!("Delete query must have the same schema with the table.");
-        }
-        if overwrite {
-            return not_impl_err!("Overwrite not implemented for MemoryTable yet");
-        }
-        // return Physical Execution Plan with a sink
-        // Sink will be executed, and written into RecordBatches
-        Ok(Arc::new(DeleteSinkExec::new(
-            input,
-            Arc::new(self.clone().into_data_sink()),
-            self.schema.clone(),
-            None,
-        )))
-    }
-}
-
-fn build_object_store_url(location: &str, region: &str) -> String {
-    format!("{}~{}", location, region)
 }
 
 #[allow(clippy::too_many_arguments)]
-/// Scans an Iceberg table and returns an `ExecutionPlan` that can be used to execute the scan.
-///
-/// This function takes in various parameters to configure the scan, including
-/// the table, snapshot range, schema, statistics, session state, projection, filters, and limit.
-/// It then constructs a `FileScanConfig` based on these parameters and uses the
-/// `ParquetFormat` to create the physical execution plan.
-///
-/// The function first checks if there are any filters on the partition columns and prunes the manifest files accordingly.
-/// It then prunes the data files based on the pruning statistics in the manifest files.
-/// Finally, it constructs the `FileScanConfig` and returns the physical execution plan.
 async fn table_scan(
     table: &Table,
     snapshot_range: &(Option<i64>, Option<i64>),
@@ -349,14 +261,10 @@ async fn table_scan(
         .and_then(|snapshot_id| table.metadata().schema(snapshot_id).ok().cloned())
         .unwrap_or_else(|| table.current_schema(None).unwrap().clone());
 
-    let location: &str = &table.catalog().location().to_owned();
-    let region: &str = &table.catalog().region().to_owned();
-
-    let result = build_object_store_url(location, region);
-
     // Create a unique URI for this particular object store
-    let object_store_url = ObjectStoreUrl::parse(&result)?;
-
+    let object_store_url = ObjectStoreUrl::parse(
+        "iceberg://".to_owned() + &util::strip_prefix(&table.metadata().location).replace('/', "-"),
+    )?;
     session
         .runtime_env()
         .register_object_store(object_store_url.as_ref(), table.object_store());
@@ -365,23 +273,14 @@ async fn table_scan(
     // This way data files with the same partition value are mapped to the same vector.
     let mut file_groups: HashMap<Vec<ScalarValue>, Vec<PartitionedFile>> = HashMap::new();
 
-    let partition_column_names = table
-        .metadata()
-        .default_partition_spec()
-        .map_err(Error::from)?
-        .fields()
+    let partition_fields = &snapshot_range
+        .1
+        .and_then(|snapshot_id| table.metadata().partition_fields(snapshot_id).ok())
+        .unwrap_or_else(|| table.metadata().current_partition_fields(None).unwrap());
+
+    let partition_column_names = partition_fields
         .iter()
-        .map(|x| {
-            Ok(schema
-                .fields()
-                .get(*x.source_id() as usize)
-                .ok_or(Error::NotFound(
-                    "Field".to_string(),
-                    x.source_id().to_string(),
-                ))?
-                .name
-                .clone())
-        })
+        .map(|field| Ok(field.source_name().to_owned()))
         .collect::<Result<HashSet<_>, Error>>()?;
 
     // If there is a filter expression the manifests to read are pruned based on the pruning statistics available in the manifest_list file.
@@ -394,36 +293,28 @@ async fn table_scan(
     } else {
         None
     };
-
     if let Some(physical_predicate) = physical_predicate.clone() {
         let partition_predicates = conjunction(
             filters
                 .iter()
                 .filter(|expr| {
-                    if let Ok(set) = expr.to_columns() {
-                        let set: HashSet<String> =
-                            set.into_iter().map(|x| x.name.clone()).collect();
-                        set.is_subset(&partition_column_names)
-                    } else {
-                        false
-                    }
+                    let set: HashSet<String> = expr
+                        .column_refs()
+                        .into_iter()
+                        .map(|x| x.name.clone())
+                        .collect();
+                    set.is_subset(&partition_column_names)
                 })
                 .cloned(),
         );
 
-
-        let manifests = match table.manifests(snapshot_range.0, snapshot_range.1).await {
-            Ok(manifests) => manifests,
-            Err(e) => {
-                return Err(DataFusionError::Execution(format!(
-                    "Error reading manifest list: {}",
-                    e
-                )))
-            }
-        };
+        let manifests = table
+            .manifests(snapshot_range.0, snapshot_range.1)
+            .await
+            .map_err(Into::<Error>::into)?;
 
         // If there is a filter expression on the partition column, the manifest files to read are pruned.
-        let data_files = if let Some(predicate) = partition_predicates {
+        let data_files: Vec<ManifestEntry> = if let Some(predicate) = partition_predicates {
             let physical_partition_predicate = create_physical_expr(
                 &predicate,
                 &arrow_schema.as_ref().clone().try_into()?,
@@ -431,25 +322,24 @@ async fn table_scan(
             )?;
             let pruning_predicate =
                 PruningPredicate::try_new(physical_partition_predicate, arrow_schema.clone())?;
-            let partition_spec = table
-                .metadata()
-                .default_partition_spec()
-                .map_err(Error::from)?;
-            let manifests_to_prune = pruning_predicate.prune(&PruneManifests::new(
-                &schema,
-                &partition_spec,
-                &manifests,
-            ))?;
+            let manifests_to_prune =
+                pruning_predicate.prune(&PruneManifests::new(partition_fields, &manifests))?;
 
             table
                 .datafiles(&manifests, Some(manifests_to_prune))
                 .await
                 .map_err(Into::<Error>::into)?
+                .try_collect()
+                .await
+                .map_err(Error::from)?
         } else {
             table
                 .datafiles(&manifests, None)
                 .await
                 .map_err(Into::<Error>::into)?
+                .try_collect()
+                .await
+                .map_err(Error::from)?
         };
 
         let pruning_predicate =
@@ -499,22 +389,18 @@ async fn table_scan(
                 };
             });
     } else {
-        let manifests = match table.manifests(snapshot_range.0, snapshot_range.1).await {
-            Ok(manifests) => manifests,
-            Err(e) => {
-                return Err(DataFusionError::Execution(format!(
-                    "Error reading manifest list: {}",
-                    e
-                )))
-            }
-        };
-        let data_files = table
-            .datafiles(&manifests, None)
+        let manifests = table
+            .manifests(snapshot_range.0, snapshot_range.1)
             .await
             .map_err(Into::<Error>::into)?;
-
+        let data_files: Vec<ManifestEntry> = table
+            .datafiles(&manifests, None)
+            .await
+            .map_err(Into::<Error>::into)?
+            .try_collect()
+            .await
+            .map_err(Error::from)?;
         data_files.into_iter().for_each(|manifest| {
-
             if *manifest.status() != Status::Deleted {
                 let partition_values = manifest
                     .data_file()
@@ -525,7 +411,6 @@ async fn table_scan(
                         None => ScalarValue::Null,
                     })
                     .collect::<Vec<ScalarValue>>();
-
                 let object_meta = ObjectMeta {
                     location: util::strip_prefix(manifest.data_file().file_path()).into(),
                     size: *manifest.data_file().file_size_in_bytes() as usize,
@@ -554,68 +439,54 @@ async fn table_scan(
         });
     };
 
-
-
     // Get all partition columns
-    let table_partition_cols: Vec<Field> = table
-        .metadata()
-        .default_partition_spec()
-        .map_err(Into::<Error>::into)?
-        .fields()
+    let table_partition_cols: Vec<Field> = partition_fields
         .iter()
-        .map(|field| {
-            let struct_field = schema.fields().get(*field.source_id() as usize).unwrap();
+        .map(|partition_field| {
             Ok(Field::new(
-                field.name().clone() + "__partition",
-                (&struct_field
-                    .field_type
-                    .tranform(field.transform())
+                partition_field.name().to_owned() + "__partition",
+                (&partition_field
+                    .field_type()
+                    .tranform(partition_field.transform())
                     .map_err(Into::<Error>::into)?)
                     .try_into()
                     .map_err(Into::<Error>::into)?,
-                !struct_field.required,
+                !partition_field.required(),
             ))
         })
         .collect::<Result<Vec<_>, DataFusionError>>()
         .map_err(Into::<Error>::into)?;
-
 
     // Add the partition columns to the table schema
     let mut schema_builder = StructType::builder();
     for field in schema.fields().iter() {
         schema_builder.with_struct_field(field.clone());
     }
-
-    for partition_field in table.metadata().default_partition_spec().unwrap().fields() {
+    for partition_field in partition_fields {
         schema_builder.with_struct_field(StructField {
-            id: *partition_field.field_id(),
-            name: partition_field.name().clone() + "__partition",
-            field_type: schema
-                .fields()
-                .get(*partition_field.source_id() as usize)
-                .unwrap()
-                .field_type
+            id: partition_field.field_id(),
+            name: partition_field.name().to_owned() + "__partition",
+            field_type: partition_field
+                .field_type()
                 .tranform(partition_field.transform())
                 .unwrap(),
             required: true,
             doc: None,
         });
     }
-
     let file_schema = Schema::builder()
         .with_schema_id(*schema.schema_id())
         .with_fields(
             schema_builder
                 .build()
-                .map_err(iceberg_rust_spec::error::Error::from)
+                .map_err(iceberg_rust::spec::error::Error::from)
                 .map_err(Error::from)?,
         )
         .build()
-        .map_err(iceberg_rust_spec::error::Error::from)
+        .map_err(iceberg_rust::spec::error::Error::from)
         .map_err(Error::from)?;
 
     let file_schema: SchemaRef = Arc::new((file_schema.fields()).try_into().unwrap());
-
 
     let file_scan_config = FileScanConfig {
         object_store_url,
@@ -678,7 +549,7 @@ impl DataSink for IcebergDataSink {
 
         let object_store = table.object_store().clone();
 
-        let datafiles = write_parquet_partitioned(
+        let metadata_files = write_parquet_partitioned(
             table.metadata(),
             data.map_err(Into::into),
             object_store,
@@ -688,166 +559,56 @@ impl DataSink for IcebergDataSink {
 
         table
             .new_transaction(self.0.branch.as_deref())
-            .append(datafiles)
+            .append(metadata_files)
             .commit()
             .await
             .map_err(Into::<Error>::into)?;
 
         Ok(0)
     }
-
     fn metrics(&self) -> Option<MetricsSet> {
         None
-    }
-}
-
-#[async_trait]
-impl OverwriteSink for IcebergDataSink {
-    fn as_any(&self) -> &dyn Any {
-        self.0.as_any()
-    }
-
-    fn metrics(&self) -> Option<MetricsSet> {
-        None
-    }
-
-    async fn overwrite_with(
-        &self,
-        input_data: SendableRecordBatchStream,
-        _context: &Arc<TaskContext>,
-        filter: Option<Arc<dyn PhysicalExpr>>,
-        op: FilterOp,
-    ) -> Result<u64, DataFusionError> {
-        let mut lock = self.0.tabular.write().await;
-        let table = if let Tabular::Table(table) = lock.deref_mut() {
-            Ok(table)
-        } else {
-            Err(Error::InvalidFormat("database entity".to_string()))
-        }
-        .map_err(Into::<Error>::into)?;
-
-        let object_store = table.object_store().clone();
-
-        let new_files = write_parquet_partitioned(
-            table.metadata(),
-            input_data.map_err(Into::into),
-            object_store.clone(),
-            self.0.branch.as_deref(),
-        )
-        .await?;
-
-        // STEP 1 : Delete the files where rows need to be changed
-        // STEP 2 : Append the new files
-        table
-            .new_transaction(self.0.branch.as_deref())
-            .overwrite(filter, new_files)
-            .commit()
-            .await
-            .map_err(Into::<Error>::into)?;
-
-        Ok(0)
     }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use datafusion::{
-        arrow::{
-            array::{Float32Array, Int64Array},
-            record_batch::RecordBatch,
+    use datafusion::{arrow::array::Int64Array, prelude::SessionContext};
+    use iceberg_rust::{
+        catalog::tabular::Tabular,
+        spec::{
+            partition::{PartitionField, Transform},
+            schema::Schema,
+            types::{PrimitiveType, StructField, StructType, Type},
         },
-        prelude::SessionContext,
     };
     use iceberg_rust::{
-        catalog::{identifier::Identifier, tabular::Tabular, Catalog},
-        table::table_builder::TableBuilder,
-        view::view_builder::ViewBuilder,
-    };
-    use iceberg_rust_spec::spec::{
-        partition::{PartitionField, PartitionSpecBuilder, Transform},
-        schema::Schema,
-        table_metadata::TableMetadata,
-        types::{PrimitiveType, StructField, StructType, Type},
+        catalog::Catalog,
+        spec::{
+            partition::PartitionSpec,
+            view_metadata::{Version, ViewRepresentation},
+        },
+        table::Table,
+        view::View,
     };
     use iceberg_sql_catalog::SqlCatalog;
-    use object_store::{local::LocalFileSystem, memory::InMemory, ObjectStore};
-    use std::sync::Arc;
+    use object_store::{memory::InMemory, ObjectStore};
+    use std::{ops::Deref, sync::Arc};
 
-    use crate::{catalog::catalog::IcebergCatalog, error::Error, DataFusionTable};
-
-    #[tokio::test]
-    pub async fn test_datafusion_table_scan() {
-        let object_store: Arc<dyn ObjectStore> =
-            Arc::new(LocalFileSystem::new_with_prefix("../iceberg-tests/nyc_taxis").unwrap());
-
-        let catalog: Arc<dyn Catalog> = Arc::new(
-            SqlCatalog::new("sqlite://", "test", "../iceberg-tests/nyc_taxis", None)
-                .await
-                .unwrap(),
-        );
-        let identifier = Identifier::parse("test.table1").unwrap();
-
-        let metadata: TableMetadata= serde_json::from_slice(&object_store.get(&"/home/iceberg/warehouse/nyc/taxis/metadata/fb072c92-a02b-11e9-ae9c-1bb7bc9eca94.metadata.json".into()).await.unwrap().bytes().await.unwrap()).unwrap();
-
-        catalog
-            .clone()
-            .create_table(identifier.clone(), metadata)
-            .await
-            .expect("Failed to register table.");
-
-        let table = if let Tabular::Table(table) = catalog
-            .load_tabular(&identifier)
-            .await
-            .expect("Failed to load table")
-        {
-            Ok(Arc::new(DataFusionTable::from(table)))
-        } else {
-            Err(Error::InvalidFormat(
-                "Entity returned from catalog".to_string(),
-            ))
-        }
-        .unwrap();
-
-        let ctx = SessionContext::new();
-
-        ctx.register_table("nyc_taxis", table).unwrap();
-
-        let df = ctx
-            .sql("SELECT vendor_id, MIN(trip_distance) FROM nyc_taxis GROUP BY vendor_id")
-            .await
-            .unwrap();
-
-        // execute the plan
-        let results: Vec<RecordBatch> = df.collect().await.expect("Failed to execute query plan.");
-
-        let batch = results
-            .into_iter()
-            .find(|batch| batch.num_rows() > 0)
-            .expect("All record batches are empty");
-
-        let values = batch
-            .column(1)
-            .as_any()
-            .downcast_ref::<Float32Array>()
-            .expect("Failed to get values from batch.");
-
-        // Value can either be 0.9 or 1.8
-        assert!(((1.35 - values.value(0)).abs() - 0.45).abs() < 0.001)
-    }
+    use crate::{catalog::catalog::IcebergCatalog, DataFusionTable};
 
     #[tokio::test]
     pub async fn test_datafusion_table_insert() {
         let object_store: Arc<dyn ObjectStore> = Arc::new(InMemory::new());
 
         let catalog: Arc<dyn Catalog> = Arc::new(
-            SqlCatalog::new("sqlite://", "test", "InMemory", None)
+            SqlCatalog::new("sqlite://", "test", object_store.clone())
                 .await
                 .unwrap(),
         );
 
         let schema = Schema::builder()
-            .with_schema_id(1)
             .with_fields(
                 StructType::builder()
                     .with_struct_field(StructField {
@@ -891,30 +652,28 @@ mod tests {
             .build()
             .unwrap();
 
-        let partition_spec = PartitionSpecBuilder::default()
-            .with_spec_id(1)
-            .with_partition_field(PartitionField::new(4, 1000, "day", Transform::Day))
+        let partition_spec = PartitionSpec::builder()
+            .with_partition_field(PartitionField::new(4, 1000, "date_day", Transform::Day))
             .build()
             .expect("Failed to create partition spec");
 
-        let mut builder =
-            TableBuilder::new("test.orders", catalog).expect("Failed to create table builder");
-        builder
-            .location("/test/orders")
-            .with_schema((1, schema))
-            .current_schema_id(1)
-            .with_partition_spec((1, partition_spec))
-            .default_spec_id(1);
-        let table = Arc::new(DataFusionTable::from(
-            builder.build().await.expect("Failed to create table."),
-        ));
+        let table = Table::builder()
+            .with_name("orders")
+            .with_location("/test/orders")
+            .with_schema(schema)
+            .with_partition_spec(partition_spec)
+            .build(&["test".to_owned()], catalog)
+            .await
+            .expect("Failed to create table");
+
+        let table = Arc::new(DataFusionTable::from(table));
 
         let ctx = SessionContext::new();
 
         ctx.register_table("orders", table).unwrap();
 
         ctx.sql(
-            "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES
+            "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES 
                 (1, 1, 1, '2020-01-01', 1),
                 (2, 2, 1, '2020-01-01', 1),
                 (3, 3, 1, '2020-01-01', 3),
@@ -965,7 +724,7 @@ mod tests {
         }
 
         ctx.sql(
-            "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES
+            "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES 
                 (7, 1, 3, '2020-01-03', 1),
                 (8, 2, 1, '2020-01-03', 2),
                 (9, 2, 2, '2020-01-03', 1);",
@@ -1018,13 +777,12 @@ mod tests {
         let object_store: Arc<dyn ObjectStore> = Arc::new(InMemory::new());
 
         let catalog: Arc<dyn Catalog> = Arc::new(
-            SqlCatalog::new("sqlite://", "test", "InMemory", None)
+            SqlCatalog::new("sqlite://", "test", object_store.clone())
                 .await
                 .unwrap(),
         );
 
         let schema = Schema::builder()
-            .with_schema_id(1)
             .with_fields(
                 StructType::builder()
                     .with_struct_field(StructField {
@@ -1068,30 +826,28 @@ mod tests {
             .build()
             .unwrap();
 
-        let partition_spec = PartitionSpecBuilder::default()
-            .with_spec_id(1)
+        let partition_spec = PartitionSpec::builder()
             .with_partition_field(PartitionField::new(4, 1000, "day", Transform::Day))
             .build()
             .expect("Failed to create partition spec");
 
-        let mut builder =
-            TableBuilder::new("test.orders", catalog).expect("Failed to create table builder");
-        builder
-            .location("/test/orders")
-            .with_schema((1, schema))
-            .current_schema_id(1)
-            .with_partition_spec((1, partition_spec))
-            .default_spec_id(1);
-        let table = Arc::new(DataFusionTable::from(
-            builder.build().await.expect("Failed to create table."),
-        ));
+        let table = Table::builder()
+            .with_name("orders")
+            .with_location("/test/orders")
+            .with_schema(schema)
+            .with_partition_spec(partition_spec)
+            .build(&["test".to_owned()], catalog)
+            .await
+            .expect("Failed to create table");
+
+        let table = Arc::new(DataFusionTable::from(table));
 
         let ctx = SessionContext::new();
 
-        ctx.register_table("orders", table).unwrap();
+        ctx.register_table("orders", table.clone()).unwrap();
 
         ctx.sql(
-            "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES
+            "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES 
                 (1, 1, 1, '2020-01-01', 1),
                 (2, 2, 1, '2020-01-01', 1),
                 (3, 3, 1, '2020-01-01', 3),
@@ -1142,10 +898,26 @@ mod tests {
         }
 
         ctx.sql(
-            "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES
+            "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES 
                 (7, 1, 3, '2020-01-03', 1),
                 (8, 2, 1, '2020-01-03', 2),
-                (9, 2, 2, '2020-01-03', 1);",
+                (9, 2, 2, '2020-01-03', 1),
+                (10, 1, 2, '2020-01-04', 3),
+                (11, 3, 1, '2020-01-04', 2),
+                (12, 2, 3, '2020-01-04', 1),
+                (13, 1, 1, '2020-01-05', 4),
+                (14, 3, 2, '2020-01-05', 2),
+                (15, 2, 3, '2020-01-05', 3),
+                (16, 2, 3, '2020-01-05', 3),
+                (17, 1, 3, '2020-01-06', 1),
+                (18, 2, 1, '2020-01-06', 2),
+                (19, 2, 2, '2020-01-06', 1),
+                (20, 1, 2, '2020-01-07', 3),
+                (21, 3, 1, '2020-01-07', 2),
+                (22, 2, 3, '2020-01-07', 1),
+                (23, 1, 1, '2020-01-08', 4),
+                (24, 3, 2, '2020-01-08', 2),
+                (25, 2, 3, '2020-01-08', 3);",
         )
         .await
         .expect("Failed to create query plan for insert")
@@ -1176,18 +948,19 @@ mod tests {
                         .unwrap(),
                 );
                 for (product_id, amount) in product_ids.iter().zip(amounts) {
-                    if product_id.unwrap() == 1 {
-                        assert_eq!(amount.unwrap(), 3)
-                    } else if product_id.unwrap() == 2 {
-                        assert_eq!(amount.unwrap(), 1)
-                    } else if product_id.unwrap() == 3 {
-                        assert_eq!(amount.unwrap(), 1)
-                    } else {
-                        panic!("Unexpected order id")
+                    match product_id.unwrap() {
+                        1 => assert_eq!(amount.unwrap(), 11),
+                        2 => assert_eq!(amount.unwrap(), 7),
+                        3 => assert_eq!(amount.unwrap(), 2),
+                        _ => panic!("Unexpected order id"),
                     }
                 }
             }
         }
+
+        if let Tabular::Table(table) = table.tabular.read().await.deref() {
+            assert_eq!(table.manifests(None, None).await.unwrap().len(), 2);
+        };
     }
 
     #[tokio::test]
@@ -1195,13 +968,12 @@ mod tests {
         let object_store: Arc<dyn ObjectStore> = Arc::new(InMemory::new());
 
         let catalog: Arc<dyn Catalog> = Arc::new(
-            SqlCatalog::new("sqlite://", "iceberg", "InMemory", None)
+            SqlCatalog::new("sqlite://", "iceberg", object_store.clone())
                 .await
                 .unwrap(),
         );
 
         let schema = Schema::builder()
-            .with_schema_id(1)
             .with_fields(
                 StructType::builder()
                     .with_struct_field(StructField {
@@ -1245,22 +1017,19 @@ mod tests {
             .build()
             .unwrap();
 
-        let partition_spec = PartitionSpecBuilder::default()
-            .with_spec_id(1)
+        let partition_spec = PartitionSpec::builder()
             .with_partition_field(PartitionField::new(4, 1000, "day", Transform::Day))
             .build()
             .expect("Failed to create partition spec");
 
-        let mut builder = TableBuilder::new("test.orders", catalog.clone())
-            .expect("Failed to create table builder");
-        builder
-            .location("/test/orders")
-            .with_schema((1, schema.clone()))
-            .current_schema_id(1)
-            .with_partition_spec((1, partition_spec))
-            .default_spec_id(1);
-
-        builder.build().await.expect("Failed to create table.");
+        Table::builder()
+            .with_name("orders")
+            .with_location("/test/orders")
+            .with_schema(schema)
+            .with_partition_spec(partition_spec)
+            .build(&["test".to_owned()], catalog.clone())
+            .await
+            .expect("Failed to create table");
 
         // Datafusion
 
@@ -1275,7 +1044,7 @@ mod tests {
         ctx.register_catalog("iceberg", datafusion_catalog);
 
         ctx.sql(
-            "INSERT INTO iceberg.test.orders (id, customer_id, product_id, date, amount) VALUES
+            "INSERT INTO iceberg.test.orders (id, customer_id, product_id, date, amount) VALUES 
                 (1, 1, 1, '2020-01-01', 1),
                 (2, 2, 1, '2020-01-01', 1),
                 (3, 3, 1, '2020-01-01', 3),
@@ -1326,7 +1095,7 @@ mod tests {
         }
 
         ctx.sql(
-            "INSERT INTO iceberg.test.orders (id, customer_id, product_id, date, amount) VALUES
+            "INSERT INTO iceberg.test.orders (id, customer_id, product_id, date, amount) VALUES 
                 (7, 1, 3, '2020-01-03', 1),
                 (8, 2, 1, '2020-01-03', 2),
                 (9, 2, 2, '2020-01-03', 1);",
@@ -1379,13 +1148,12 @@ mod tests {
         let object_store: Arc<dyn ObjectStore> = Arc::new(InMemory::new());
 
         let catalog: Arc<dyn Catalog> = Arc::new(
-            SqlCatalog::new("sqlite://", "test", "inMemory", None)
+            SqlCatalog::new("sqlite://", "test", object_store.clone())
                 .await
                 .unwrap(),
         );
 
         let schema = Schema::builder()
-            .with_schema_id(1)
             .with_fields(
                 StructType::builder()
                     .with_struct_field(StructField {
@@ -1428,30 +1196,28 @@ mod tests {
             )
             .build()
             .unwrap();
-        let partition_spec = PartitionSpecBuilder::default()
-            .with_spec_id(1)
+        let partition_spec = PartitionSpec::builder()
             .with_partition_field(PartitionField::new(4, 1000, "day", Transform::Day))
             .build()
             .expect("Failed to create partition spec");
 
-        let mut builder = TableBuilder::new("test.orders", catalog.clone())
-            .expect("Failed to create table builder");
-        builder
-            .location("/test/orders")
-            .with_schema((1, schema.clone()))
-            .current_schema_id(1)
-            .with_partition_spec((1, partition_spec))
-            .default_spec_id(1);
-        let table = Arc::new(DataFusionTable::from(
-            builder.build().await.expect("Failed to create table."),
-        ));
+        let table = Table::builder()
+            .with_name("orders")
+            .with_location("/test/orders")
+            .with_schema(schema)
+            .with_partition_spec(partition_spec)
+            .build(&["schema".to_owned()], catalog.clone())
+            .await
+            .expect("Failed to create table");
+
+        let table = Arc::new(DataFusionTable::from(table));
 
         let ctx = SessionContext::new();
 
         ctx.register_table("orders", table).unwrap();
 
         ctx.sql(
-            "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES
+            "INSERT INTO orders (id, customer_id, product_id, date, amount) VALUES 
                 (1, 1, 1, '2020-01-01', 1),
                 (2, 2, 1, '2020-01-01', 1),
                 (3, 3, 1, '2020-01-01', 3),
@@ -1469,18 +1235,17 @@ mod tests {
         .expect("Failed to insert values into table");
 
         let view_schema = Schema::builder()
-            .with_schema_id(1)
             .with_fields(
                 StructType::builder()
                     .with_struct_field(StructField {
-                        id: 1,
+                        id: 3,
                         name: "product_id".to_string(),
                         required: true,
                         field_type: Type::Primitive(PrimitiveType::Long),
                         doc: None,
                     })
                     .with_struct_field(StructField {
-                        id: 2,
+                        id: 5,
                         name: "amount".to_string(),
                         required: true,
                         field_type: Type::Primitive(PrimitiveType::Int),
@@ -1492,21 +1257,24 @@ mod tests {
             .build()
             .unwrap();
 
-        let mut builder = ViewBuilder::new(
-            "select product_id, amount from orders where product_id < 3;",
-            "test.orders_view",
-            view_schema,
-            catalog,
-        )
-        .expect("Failed to create filesystem view builder.");
-        builder.location("test/orders_view");
+        let view = View::builder()
+            .with_name("orders_view")
+            .with_location("test/orders_view")
+            .with_schema(view_schema)
+            .with_view_version(
+                Version::builder()
+                    .with_representation(ViewRepresentation::sql(
+                        "select product_id, amount from orders where product_id < 3;",
+                        None,
+                    ))
+                    .build()
+                    .unwrap(),
+            )
+            .build(&["test".to_owned()], catalog)
+            .await
+            .expect("Failed to build view");
 
-        let view = Arc::new(DataFusionTable::from(
-            builder
-                .build()
-                .await
-                .expect("Failed to create filesystem view"),
-        ));
+        let view = Arc::new(DataFusionTable::from(view));
 
         ctx.register_table("orders_view", view).unwrap();
 

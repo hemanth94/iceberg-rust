@@ -107,7 +107,7 @@ mod tests {
             ],
             None,
         )
-            .unwrap();
+        .unwrap();
         assert_eq!(&format!("{}", identifier), "level1.level2.table");
     }
     #[test]
@@ -117,7 +117,7 @@ mod tests {
             &["level1".to_string(), "level2".to_string(), "".to_string()],
             None,
         )
-            .unwrap();
+        .unwrap();
     }
     #[test]
     #[should_panic]

@@ -2,65 +2,121 @@
  * A Struct for the materialized view metadata   
 */
 
-use itertools::Itertools;
-use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, ops::Deref};
 
-use crate::error::Error;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+use crate::identifier::Identifier;
 
 use super::view_metadata::{GeneralViewMetadata, GeneralViewMetadataBuilder};
 
-/// Property for the metadata location
-pub static STORAGE_TABLE: &str = "storage_table";
+pub static REFRESH_STATE: &str = "refresh-state";
 
 /// Fields for the version 1 of the view metadata.
-pub type MaterializedViewMetadata = GeneralViewMetadata<String>;
+pub type MaterializedViewMetadata = GeneralViewMetadata<Identifier>;
 /// Builder for materialized view metadata
-pub type MaterializedViewMetadataBuilder = GeneralViewMetadataBuilder<String>;
-
-pub fn depends_on_tables_to_string(source_tables: &[SourceTable]) -> Result<String, Error> {
-    Ok(source_tables
-        .iter()
-        .map(|x| x.identifier.to_string() + "=" + &x.snapshot_id.to_string())
-        .join(","))
-}
-
-pub fn depends_on_tables_from_string(value: &str) -> Result<Vec<SourceTable>, Error> {
-    value
-        .split(',')
-        .map(|x| {
-            x.split('=')
-                .next_tuple()
-                .ok_or(Error::InvalidFormat("Lineage information".to_owned()))
-                .and_then(|(identifier, snapshot_id)| {
-                    Ok(SourceTable {
-                        identifier: identifier.to_owned(),
-                        snapshot_id: snapshot_id.parse()?,
-                    })
-                })
-        })
-        .collect::<Result<_, Error>>()
-}
+pub type MaterializedViewMetadataBuilder = GeneralViewMetadataBuilder<Identifier>;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "kebab-case")]
 /// Freshness information of the materialized view
+pub struct RefreshState {
+    /// The version-id of the materialized view when the refresh operation was performed.
+    pub refresh_version_id: i64,
+    /// A map from sequence-id (as defined in the view lineage) to the source tables’ snapshot-id of when the last refresh operation was performed.
+    pub source_table_states: SourceTables,
+    /// A map from sequence-id (as defined in the view lineage) to the source views’ version-id of when the last refresh operation was performed.
+    pub source_view_states: SourceViews,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[serde(from = "Vec<SourceTable>", into = "Vec<SourceTable>")]
+pub struct SourceTables(pub HashMap<(Uuid, Option<String>), i64>);
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[serde(from = "Vec<SourceView>", into = "Vec<SourceView>")]
+pub struct SourceViews(pub HashMap<(Uuid, Option<String>), i64>);
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[serde(rename_all = "kebab-case")]
 pub struct SourceTable {
-    /// Table reference in the SQL expression.
-    pub identifier: String,
-    /// Snapshot id of the base table when the refresh operation was performed.
-    pub snapshot_id: i64,
+    uuid: Uuid,
+    snapshot_id: i64,
+    r#ref: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[serde(rename_all = "kebab-case")]
+pub struct SourceView {
+    uuid: Uuid,
+    version_id: i64,
+}
+
+impl From<Vec<SourceTable>> for SourceTables {
+    fn from(value: Vec<SourceTable>) -> Self {
+        SourceTables(
+            value
+                .into_iter()
+                .map(|x| ((x.uuid, x.r#ref), x.snapshot_id))
+                .collect(),
+        )
+    }
+}
+
+impl From<SourceTables> for Vec<SourceTable> {
+    fn from(value: SourceTables) -> Self {
+        value
+            .0
+            .into_iter()
+            .map(|((uuid, r#ref), snapshot_id)| SourceTable {
+                uuid,
+                snapshot_id,
+                r#ref,
+            })
+            .collect()
+    }
+}
+
+impl From<Vec<SourceView>> for SourceViews {
+    fn from(value: Vec<SourceView>) -> Self {
+        SourceViews(
+            value
+                .into_iter()
+                .map(|x| ((x.uuid, None), x.version_id))
+                .collect(),
+        )
+    }
+}
+
+impl From<SourceViews> for Vec<SourceView> {
+    fn from(value: SourceViews) -> Self {
+        value
+            .0
+            .into_iter()
+            .map(|((uuid, _), version_id)| SourceView { uuid, version_id })
+            .collect()
+    }
+}
+
+impl Deref for SourceTables {
+    type Target = HashMap<(Uuid, Option<String>), i64>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Deref for SourceViews {
+    type Target = HashMap<(Uuid, Option<String>), i64>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        error::Error,
-        spec::materialized_view_metadata::{
-            depends_on_tables_from_string, depends_on_tables_to_string, MaterializedViewMetadata,
-            SourceTable,
-        },
-    };
+    use crate::{error::Error, spec::materialized_view_metadata::MaterializedViewMetadata};
 
     #[test]
     fn test_deserialize_materialized_view_metadata_v1() -> Result<(), Error> {
@@ -71,8 +127,7 @@ mod tests {
         "location" : "s3://bucket/warehouse/default.db/event_agg",
         "current-version-id" : 1,
         "properties" : {
-            "comment" : "Daily event counts",
-            "storage_table": "iceberg.default.event_agg"
+            "comment" : "Daily event counts"
         },
         "versions" : [ {
             "version-id" : 1,
@@ -89,7 +144,12 @@ mod tests {
             "type" : "sql",
             "sql" : "SELECT\n    COUNT(1), CAST(event_ts AS DATE)\nFROM events\nGROUP BY 2",
             "dialect" : "spark"
-            } ]
+            } ],
+            "storage-table": {
+                "catalog": "prod",
+                "namespace": ["default"],
+                "name": "event_agg_storage"
+            }
         } ],
         "schemas": [ {
             "schema-id": 1,
@@ -123,45 +183,5 @@ mod tests {
         assert_eq!(metadata, metadata_two);
 
         Ok(())
-    }
-
-    #[test]
-    fn test_depends_on_tables_try_from_str() {
-        let input = "table1=1,table2=2";
-
-        let result = depends_on_tables_from_string(input).unwrap();
-
-        assert_eq!(
-            result,
-            vec![
-                SourceTable {
-                    identifier: "table1".to_string(),
-                    snapshot_id: 1
-                },
-                SourceTable {
-                    identifier: "table2".to_string(),
-                    snapshot_id: 2
-                }
-            ]
-        );
-    }
-
-    #[test]
-    fn test_try_from_depends_on_tables_to_string() {
-        let depends_on_tables = vec![
-            SourceTable {
-                identifier: "table1".to_string(),
-                snapshot_id: 1,
-            },
-            SourceTable {
-                identifier: "table2".to_string(),
-                snapshot_id: 2,
-            },
-        ];
-
-        let result = depends_on_tables_to_string(&depends_on_tables);
-
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "table1=1,table2=2");
     }
 }

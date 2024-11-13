@@ -10,15 +10,22 @@ use iceberg_rust_spec::spec::{
 use object_store::ObjectStore;
 
 use crate::{
-    catalog::{bucket::parse_bucket, identifier::Identifier, tabular::Tabular, Catalog},
+    catalog::{
+        bucket::Bucket, create::CreateMaterializedViewBuilder, identifier::Identifier,
+        tabular::Tabular, Catalog,
+    },
     error::Error,
 };
 
 use self::{storage_table::StorageTable, transaction::Transaction as MaterializedViewTransaction};
 
-pub mod materialized_view_builder;
 mod storage_table;
 pub mod transaction;
+
+/// Default postfix for the storage table identifier
+pub static STORAGE_TABLE_POSTFIX: &str = "__storage";
+/// Flag to mark a table as a storage table
+pub static STORAGE_TABLE_FLAG: &str = "materialize.storage_table";
 
 #[derive(Debug)]
 /// An iceberg materialized view
@@ -44,6 +51,11 @@ pub enum StorageTableState {
 
 /// Public interface of the table.
 impl MaterializedView {
+    /// Create a mateerialized view builder
+    pub fn builder() -> CreateMaterializedViewBuilder {
+        CreateMaterializedViewBuilder::default()
+    }
+
     /// Create a new metastore view
     pub async fn new(
         identifier: Identifier,
@@ -67,7 +79,7 @@ impl MaterializedView {
     /// Get the object_store associated to the view
     pub fn object_store(&self) -> Arc<dyn ObjectStore> {
         self.catalog
-            .object_store(parse_bucket(&self.metadata.location).unwrap())
+            .object_store(Bucket::from_path(&self.metadata.location).unwrap())
     }
     /// Get the schema of the view
     pub fn current_schema(&self, branch: Option<&str>) -> Result<&Schema, Error> {
@@ -83,8 +95,8 @@ impl MaterializedView {
     }
     /// Get the storage table of the materialized view
     pub async fn storage_table(&self) -> Result<StorageTable, Error> {
-        let identifier = Identifier::parse(&self.metadata().properties.storage_table, None)?;
-        if let Tabular::Table(table) = self.catalog().load_tabular(&identifier).await? {
+        let identifier = self.metadata().current_version(None)?.storage_table();
+        if let Tabular::Table(table) = self.catalog().load_tabular(identifier).await? {
             Ok(StorageTable::new(table))
         } else {
             Err(Error::InvalidFormat("storage table".to_string()))

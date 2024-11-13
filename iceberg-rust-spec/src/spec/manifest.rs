@@ -1,175 +1,24 @@
 /*!
 Manifest files
 */
-use std::{
-    collections::HashMap,
-    io::Read,
-    iter::{repeat, Map, Repeat, Zip},
-    ops::{Deref, DerefMut},
-    sync::Arc,
-};
+use std::collections::HashMap;
 
-use apache_avro::{
-    types::Value as AvroValue, Reader as AvroReader, Schema as AvroSchema, Writer as AvroWriter,
-};
+use apache_avro::Schema as AvroSchema;
 use derive_builder::Builder;
 use derive_getters::Getters;
 use serde::{de::DeserializeOwned, ser::SerializeSeq, Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use crate::{
-    error::Error,
-    spec::schema::{SchemaV1, SchemaV2},
-};
+use crate::{error::Error, partition::BoundPartitionField};
 
 use super::{
-    partition::{PartitionField, PartitionSpec},
+    partition::PartitionSpec,
     schema::Schema,
-    table_metadata::{FormatVersion, TableMetadata},
+    table_metadata::FormatVersion,
     types::{PrimitiveType, StructType, Type},
     values::{Struct, Value},
 };
-
-type ReaderZip<'a, R> = Zip<AvroReader<'a, R>, Repeat<Arc<(Schema, PartitionSpec, FormatVersion)>>>;
-type ReaderMap<'a, R> = Map<
-    ReaderZip<'a, R>,
-    fn(
-        (
-            Result<AvroValue, apache_avro::Error>,
-            Arc<(Schema, PartitionSpec, FormatVersion)>,
-        ),
-    ) -> Result<ManifestEntry, Error>,
->;
-
-/// Iterator of ManifestFileEntries
-pub struct ManifestReader<'a, R: Read> {
-    reader: ReaderMap<'a, R>,
-}
-
-impl<'a, R: Read> Iterator for ManifestReader<'a, R> {
-    type Item = Result<ManifestEntry, Error>;
-    fn next(&mut self) -> Option<Self::Item> {
-        self.reader.next()
-    }
-}
-
-impl<'a, R: Read> ManifestReader<'a, R> {
-    /// Create a new ManifestFile reader
-    pub fn new(reader: R) -> Result<Self, Error> {
-        let reader = AvroReader::new(reader)?;
-        let metadata = reader.user_metadata();
-
-        let format_version: FormatVersion = match metadata
-            .get("format-version")
-            .map(|bytes| String::from_utf8(bytes.clone()))
-            .transpose()?
-            .unwrap_or("1".to_string())
-            .as_str()
-        {
-            "1" => Ok(FormatVersion::V1),
-            "2" => Ok(FormatVersion::V2),
-            _ => Err(Error::InvalidFormat("format version".to_string())),
-        }?;
-
-        let schema: Schema = match format_version {
-            FormatVersion::V1 => TryFrom::<SchemaV1>::try_from(serde_json::from_slice(
-                metadata
-                    .get("schema")
-                    .ok_or(Error::InvalidFormat("manifest metadata".to_string()))?,
-            )?)?,
-            FormatVersion::V2 => TryFrom::<SchemaV2>::try_from(serde_json::from_slice(
-                metadata
-                    .get("schema")
-                    .ok_or(Error::InvalidFormat("manifest metadata".to_string()))?,
-            )?)?,
-        };
-
-        let partition_fields: Vec<PartitionField> = serde_json::from_slice(
-            metadata
-                .get("partition-spec")
-                .ok_or(Error::InvalidFormat("manifest metadata".to_string()))?,
-        )?;
-        let spec_id: i32 = metadata
-            .get("partition-spec-id")
-            .map(|x| String::from_utf8(x.clone()))
-            .transpose()?
-            .unwrap_or("0".to_string())
-            .parse()?;
-        let partition_spec = PartitionSpec::builder()
-            .with_spec_id(spec_id)
-            .with_fields(partition_fields)
-            .build()?;
-        Ok(Self {
-            reader: reader
-                .zip(repeat(Arc::new((schema, partition_spec, format_version))))
-                .map(avro_value_to_manifest_entry),
-        })
-    }
-}
-
-/// A writer for manifest entries
-pub struct ManifestWriter<'a, W: std::io::Write>(AvroWriter<'a, W>);
-
-impl<'a, W: std::io::Write> Deref for ManifestWriter<'a, W> {
-    type Target = AvroWriter<'a, W>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<'a, W: std::io::Write> DerefMut for ManifestWriter<'a, W> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl<'a, W: std::io::Write> ManifestWriter<'a, W> {
-    pub fn new(
-        writer: W,
-        schema: &'a AvroSchema,
-        table_metadata: &TableMetadata,
-        branch: Option<&str>,
-    ) -> Result<Self, Error> {
-        let mut avro_writer = AvroWriter::new(schema, writer);
-
-        avro_writer.add_user_metadata(
-            "format-version".to_string(),
-            match table_metadata.format_version {
-                FormatVersion::V1 => "1".as_bytes(),
-                FormatVersion::V2 => "2".as_bytes(),
-            },
-        )?;
-
-        avro_writer.add_user_metadata(
-            "schema".to_string(),
-            match table_metadata.format_version {
-                FormatVersion::V1 => serde_json::to_string(&Into::<SchemaV1>::into(
-                    table_metadata.current_schema(branch)?.clone(),
-                ))?,
-                FormatVersion::V2 => serde_json::to_string(&Into::<SchemaV2>::into(
-                    table_metadata.current_schema(branch)?.clone(),
-                ))?,
-            },
-        )?;
-
-        avro_writer.add_user_metadata(
-            "partition-spec".to_string(),
-            serde_json::to_string(&table_metadata.default_partition_spec()?.fields())?,
-        )?;
-
-        avro_writer.add_user_metadata(
-            "partition-spec-id".to_string(),
-            serde_json::to_string(&table_metadata.default_partition_spec()?.spec_id())?,
-        )?;
-
-        Ok(ManifestWriter(avro_writer))
-    }
-
-    pub fn into_inner(self) -> Result<W, Error> {
-        Ok(self.0.into_inner()?)
-    }
-}
 
 /// Entry in manifest with the iceberg spec version 2.
 #[derive(Debug, Serialize, PartialEq, Clone, Getters, Builder)]
@@ -182,8 +31,10 @@ pub struct ManifestEntry {
     status: Status,
     /// Snapshot id where the file was added, or deleted if status is 2.
     /// Inherited when null.
+    #[builder(setter(strip_option), default)]
     snapshot_id: Option<i64>,
     /// Sequence number when the file was added. Inherited when null.
+    #[builder(setter(strip_option), default)]
     sequence_number: Option<i64>,
     /// File path, partition tuple, metrics, …
     data_file: DataFile,
@@ -193,10 +44,18 @@ impl ManifestEntry {
     pub fn builder() -> ManifestEntryBuilder {
         ManifestEntryBuilder::default()
     }
+
+    pub fn status_mut(&mut self) -> &mut Status {
+        &mut self.status
+    }
+
+    pub fn sequence_number_mut(&mut self) -> &mut Option<i64> {
+        &mut self.sequence_number
+    }
 }
 
 impl ManifestEntry {
-    pub(crate) fn try_from_v2(
+    pub fn try_from_v2(
         value: ManifestEntryV2,
         schema: &Schema,
         partition_spec: &PartitionSpec,
@@ -210,7 +69,7 @@ impl ManifestEntry {
         })
     }
 
-    pub(crate) fn try_from_v1(
+    pub fn try_from_v1(
         value: ManifestEntryV1,
         schema: &Schema,
         partition_spec: &PartitionSpec,
@@ -381,7 +240,7 @@ impl ManifestEntry {
     }
 }
 
-#[derive(Debug, Serialize_repr, Deserialize_repr, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize_repr, Deserialize_repr, PartialEq, Eq, Clone, Copy)]
 #[repr(u8)]
 /// Used to track additions and deletions
 pub enum Status {
@@ -479,26 +338,17 @@ impl<'de> Deserialize<'de> for FileFormat {
 }
 
 /// Get schema for partition values depending on partition spec and table schema
-pub fn partition_value_schema(
-    spec: &[PartitionField],
-    table_schema: &Schema,
-) -> Result<String, Error> {
+pub fn partition_value_schema(spec: &[BoundPartitionField<'_>]) -> Result<String, Error> {
     Ok(spec
         .iter()
         .map(|field| {
-            let schema_field = table_schema
-                .fields()
-                .get(*field.source_id() as usize)
-                .ok_or_else(|| {
-                    Error::Schema(field.name().to_string(), format!("{:?}", &table_schema))
-                })?;
-            let data_type = avro_schema_datatype(&schema_field.field_type);
+            let data_type = avro_schema_datatype(field.field_type());
             Ok::<_, Error>(
                 r#"
                 {
                     "name": ""#
                     .to_owned()
-                    + &schema_field.name
+                    + field.name()
                     + r#"", 
                     "type":  ["null",""#
                     + &format!("{}", &data_type)
@@ -1474,37 +1324,10 @@ impl DataFileV2 {
     }
 }
 
-#[allow(clippy::type_complexity)]
-// Convert avro value to ManifestEntry based on the format version of the table.
-fn avro_value_to_manifest_entry(
-    value: (
-        Result<AvroValue, apache_avro::Error>,
-        Arc<(Schema, PartitionSpec, FormatVersion)>,
-    ),
-) -> Result<ManifestEntry, Error> {
-    let entry = value.0?;
-    let schema = &value.1 .0;
-    let partition_spec = &value.1 .1;
-    let format_version = &value.1 .2;
-    match format_version {
-        FormatVersion::V2 => ManifestEntry::try_from_v2(
-            apache_avro::from_value::<ManifestEntryV2>(&entry)?,
-            schema,
-            partition_spec,
-        ),
-        FormatVersion::V1 => ManifestEntry::try_from_v1(
-            apache_avro::from_value::<ManifestEntryV1>(&entry)?,
-            schema,
-            partition_spec,
-        ),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::spec::{
-        partition::{PartitionField, PartitionSpecBuilder, Transform},
-        schema::SchemaV2,
+        partition::{PartitionField, Transform},
         table_metadata::TableMetadataBuilder,
         types::{PrimitiveType, StructField, StructType, Type},
         values::Value,
@@ -1517,11 +1340,10 @@ mod tests {
     fn manifest_entry() {
         let table_metadata = TableMetadataBuilder::default()
             .location("/")
-            .current_schema_id(1)
+            .current_schema_id(0)
             .schemas(HashMap::from_iter(vec![(
-                1,
+                0,
                 Schema::builder()
-                    .with_schema_id(1)
                     .with_fields(
                         StructType::builder()
                             .with_struct_field(StructField {
@@ -1537,11 +1359,10 @@ mod tests {
                     .build()
                     .unwrap(),
             )]))
-            .default_spec_id(1)
+            .default_spec_id(0)
             .partition_specs(HashMap::from_iter(vec![(
-                1,
-                PartitionSpecBuilder::default()
-                    .with_spec_id(1)
+                0,
+                PartitionSpec::builder()
                     .with_partition_field(PartitionField::new(0, 1000, "day", Transform::Day))
                     .build()
                     .unwrap(),
@@ -1558,7 +1379,7 @@ mod tests {
                 content: Content::Data,
                 file_path: "/".to_string(),
                 file_format: FileFormat::Parquet,
-                partition: Struct::from_iter(vec![("date".to_owned(), Some(Value::Int(1)))]),
+                partition: Struct::from_iter(vec![("day".to_owned(), Some(Value::Int(1)))]),
                 record_count: 4,
                 file_size_in_bytes: 1200,
                 column_sizes: None,
@@ -1575,11 +1396,9 @@ mod tests {
             },
         };
 
-        let partition_schema = partition_value_schema(
-            table_metadata.default_partition_spec().unwrap().fields(),
-            table_metadata.current_schema(None).unwrap(),
-        )
-        .unwrap();
+        let partition_schema =
+            partition_value_schema(&table_metadata.current_partition_fields(None).unwrap())
+                .unwrap();
 
         let schema = ManifestEntry::schema(&partition_schema, &FormatVersion::V2).unwrap();
 
@@ -1647,11 +1466,10 @@ mod tests {
     fn test_read_manifest_entry() {
         let table_metadata = TableMetadataBuilder::default()
             .location("/")
-            .current_schema_id(1)
+            .current_schema_id(0)
             .schemas(HashMap::from_iter(vec![(
-                1,
+                0,
                 Schema::builder()
-                    .with_schema_id(1)
                     .with_fields(
                         StructType::builder()
                             .with_struct_field(StructField {
@@ -1667,11 +1485,10 @@ mod tests {
                     .build()
                     .unwrap(),
             )]))
-            .default_spec_id(1)
+            .default_spec_id(0)
             .partition_specs(HashMap::from_iter(vec![(
-                1,
-                PartitionSpecBuilder::default()
-                    .with_spec_id(1)
+                0,
+                PartitionSpec::builder()
                     .with_partition_field(PartitionField::new(0, 1000, "day", Transform::Day))
                     .build()
                     .unwrap(),
@@ -1688,7 +1505,7 @@ mod tests {
                 content: Content::Data,
                 file_path: "/".to_string(),
                 file_format: FileFormat::Parquet,
-                partition: Struct::from_iter(vec![("date".to_owned(), Some(Value::Int(1)))]),
+                partition: Struct::from_iter(vec![("day".to_owned(), Some(Value::Int(1)))]),
                 record_count: 4,
                 file_size_in_bytes: 1200,
                 column_sizes: None,
@@ -1705,11 +1522,9 @@ mod tests {
             },
         };
 
-        let partition_schema = partition_value_schema(
-            table_metadata.default_partition_spec().unwrap().fields(),
-            table_metadata.current_schema(None).unwrap(),
-        )
-        .unwrap();
+        let partition_schema =
+            partition_value_schema(&table_metadata.current_partition_fields(None).unwrap())
+                .unwrap();
 
         let schema = ManifestEntry::schema(&partition_schema, &FormatVersion::V2).unwrap();
 
@@ -1776,26 +1591,17 @@ mod tests {
     pub fn test_partition_values() {
         let partition_values = Struct::from_iter(vec![("day".to_owned(), Some(Value::Int(1)))]);
 
-        let table_schema = SchemaV2 {
-            schema_id: 0,
-            identifier_field_ids: None,
-            fields: StructType::new(vec![StructField {
-                id: 4,
-                name: "day".to_owned(),
-                required: false,
-                field_type: Type::Primitive(PrimitiveType::Int),
-                doc: None,
-            }]),
+        let part_field = PartitionField::new(4, 1000, "day", Transform::Day);
+        let field = StructField {
+            id: 4,
+            name: "day".to_owned(),
+            required: false,
+            field_type: Type::Primitive(PrimitiveType::Int),
+            doc: None,
         };
+        let partition_fields = vec![BoundPartitionField::new(&part_field, &field)];
 
-        let spec = PartitionSpecBuilder::default()
-            .with_spec_id(0)
-            .with_partition_field(PartitionField::new(4, 1000, "day", Transform::Day))
-            .build()
-            .unwrap();
-
-        let raw_schema =
-            partition_value_schema(spec.fields(), &table_schema.try_into().unwrap()).unwrap();
+        let raw_schema = partition_value_schema(&partition_fields).unwrap();
 
         let schema = apache_avro::Schema::parse_str(&raw_schema).unwrap();
 

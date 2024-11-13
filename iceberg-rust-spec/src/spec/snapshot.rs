@@ -3,28 +3,17 @@
 */
 use std::{
     collections::HashMap,
-    fmt,
-    io::Cursor,
-    str,
-    sync::Arc,
+    fmt, str,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use derive_builder::Builder;
 use derive_getters::Getters;
-use object_store::ObjectStore;
 use serde::{Deserialize, Serialize};
 
-use crate::{error::Error, util};
-
-use super::{
-    manifest_list::{ManifestListEntry, ManifestListReader},
-    table_metadata::TableMetadata,
-};
+use crate::error::Error;
 
 use _serde::SnapshotEnum;
-
-pub static DEPENDS_ON_TABLES: &str = "depends_on_tables";
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Builder, Getters)]
 #[serde(from = "SnapshotEnum", into = "SnapshotEnum")]
@@ -58,30 +47,10 @@ pub struct Snapshot {
     schema_id: Option<i32>,
 }
 
-impl Snapshot {
-    // Return all manifest files associated to the latest table snapshot. Reads the related manifest_list file and returns its entries.
-    // If the manifest list file is empty returns an empty vector.
-    pub async fn manifests<'metadata>(
-        &self,
-        table_metadata: &'metadata TableMetadata,
-        object_store: Arc<dyn ObjectStore>,
-    ) -> Result<impl Iterator<Item = Result<ManifestListEntry, Error>> + 'metadata, Error> {
-        let bytes: Cursor<Vec<u8>> = Cursor::new(
-            object_store
-                .get(&util::strip_prefix(&self.manifest_list).into())
-                .await?
-                .bytes()
-                .await?
-                .into(),
-        );
-        ManifestListReader::new(bytes, table_metadata).map_err(Into::into)
-    }
-}
-
 pub fn generate_snapshot_id() -> i64 {
     let mut bytes: [u8; 8] = [0u8; 8];
     getrandom::getrandom(&mut bytes).unwrap();
-    u64::from_le_bytes(bytes) as i64
+    i64::from_le_bytes(bytes).abs()
 }
 
 impl fmt::Display for Snapshot {
@@ -89,7 +58,7 @@ impl fmt::Display for Snapshot {
         write!(
             f,
             "{}",
-            &serde_json::to_string(self).map_err(|_| fmt::Error::default())?,
+            &serde_json::to_string(self).map_err(|_| fmt::Error)?,
         )
     }
 }
@@ -118,7 +87,7 @@ pub(crate) mod _serde {
     #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
     #[serde(rename_all = "kebab-case")]
     /// A snapshot represents the state of a table at some time and is used to access the complete set of data files in the table.
-    pub(crate) struct SnapshotV2 {
+    pub struct SnapshotV2 {
         /// A unique long ID
         pub snapshot_id: i64,
         /// The snapshot ID of the snapshot’s parent.
@@ -144,7 +113,7 @@ pub(crate) mod _serde {
     #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
     #[serde(rename_all = "kebab-case")]
     /// A snapshot represents the state of a table at some time and is used to access the complete set of data files in the table.
-    pub(crate) struct SnapshotV1 {
+    pub struct SnapshotV1 {
         /// A unique long ID
         pub snapshot_id: i64,
         /// The snapshot ID of the snapshot’s parent.

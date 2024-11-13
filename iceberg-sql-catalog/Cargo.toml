@@ -1,28 +1,30 @@
 [package]
 name = "iceberg-sql-catalog"
-version = "0.3.0"
+version = "0.5.8"
 edition = "2021"
 
-description = "Sql catalog for Apache Iceberg tables"
+description = "Sql catalog for the unofficial Iceberg table format implementation"
 
 license = "Apache-2.0"
 
 repository = "https://github.com/JanKaul/iceberg-rust"
 
+[features]
+default = ["runtime-tokio"]
+runtime-tokio = ["sqlx/runtime-tokio"]
+runtime-async-std = ["sqlx/runtime-async-std"]
+
 [dependencies]
 async-trait.workspace = true
-dashmap = "5.5.3"
 futures.workspace = true
-iceberg-rust = { path = "../iceberg-rust", version = "0.3.0" }
+iceberg-rust = { path = "../iceberg-rust", version = "0.5.8" }
 object_store.workspace = true
 serde_json.workspace = true
-sqlx = { version = "0.7.4", features = ["tls-rustls", "any", "sqlite", "postgres", "mysql"], default-features = false }
+sqlx = { version = "0.8", features = ["tls-rustls", "any", "sqlite", "postgres", "mysql"], default-features = false }
 thiserror.workspace = true
 url.workspace = true
 uuid = { version = "1.7.0", features = ["v4"] }
-datafusion = { workspace = true }
-datafusion-expr = { workspace = true }
 
 [dev-dependencies]
 tokio = "1"
-sqlx = { version = "0.7.4", features = ["runtime-tokio", "tls-rustls", "any", "sqlite", "postgres", "mysql"], default-features = false }
+sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "any", "sqlite", "postgres", "mysql"], default-features = false }

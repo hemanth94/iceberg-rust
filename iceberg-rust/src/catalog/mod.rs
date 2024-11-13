@@ -2,17 +2,10 @@
 Defines traits to communicate with an iceberg catalog.
 */
 
-use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-pub mod identifier;
-pub mod namespace;
-
-use iceberg_rust_spec::spec::materialized_view_metadata::MaterializedViewMetadata;
-use iceberg_rust_spec::spec::table_metadata::TableMetadata;
-use iceberg_rust_spec::spec::view_metadata::ViewMetadata;
 use identifier::Identifier;
 use object_store::ObjectStore;
 
@@ -23,16 +16,20 @@ use crate::view::View;
 
 use self::bucket::Bucket;
 use self::commit::{CommitTable, CommitView};
+use self::create::{CreateMaterializedView, CreateTable, CreateView};
 use self::namespace::Namespace;
 use self::tabular::Tabular;
 
 pub mod bucket;
 pub mod commit;
+pub mod create;
 pub mod tabular;
 
 /// Trait to create, replace and drop tables in an iceberg catalog.
 #[async_trait::async_trait]
 pub trait Catalog: Send + Sync + Debug {
+    /// Name of the catalog
+    fn name(&self) -> &str;
     /// Create a namespace in the catalog
     async fn create_namespace(
         &self,
@@ -67,47 +64,58 @@ pub trait Catalog: Send + Sync + Debug {
     async fn drop_materialized_view(&self, identifier: &Identifier) -> Result<(), Error>;
     /// Load a table.
     async fn load_tabular(self: Arc<Self>, identifier: &Identifier) -> Result<Tabular, Error>;
-    /// Register a table with the catalog if it doesn't exist.
+    /// Create a table in the catalog if it doesn't exist.
     async fn create_table(
         self: Arc<Self>,
         identifier: Identifier,
-        metadata: TableMetadata,
+        create_table: CreateTable,
     ) -> Result<Table, Error>;
-    /// Register a view with the catalog if it doesn't exist.
+    /// Create a view with the catalog if it doesn't exist.
     async fn create_view(
         self: Arc<Self>,
         identifier: Identifier,
-        metadata: ViewMetadata,
+        create_view: CreateView<Option<()>>,
     ) -> Result<View, Error>;
     /// Register a materialized view with the catalog if it doesn't exist.
     async fn create_materialized_view(
         self: Arc<Self>,
         identifier: Identifier,
-        metadata: MaterializedViewMetadata,
+        create_view: CreateMaterializedView,
     ) -> Result<MaterializedView, Error>;
     /// perform commit table operation
     async fn update_table(self: Arc<Self>, commit: CommitTable) -> Result<Table, Error>;
     /// perform commit view operation
-    async fn update_view(self: Arc<Self>, commit: CommitView) -> Result<View, Error>;
+    async fn update_view(self: Arc<Self>, commit: CommitView<Option<()>>) -> Result<View, Error>;
     /// perform commit view operation
     async fn update_materialized_view(
         self: Arc<Self>,
-        commit: CommitView,
+        commit: CommitView<Identifier>,
     ) -> Result<MaterializedView, Error>;
+    /// Register a table with the catalog if it doesn't exist.
+    async fn register_table(
+        self: Arc<Self>,
+        identifier: Identifier,
+        metadata_location: &str,
+    ) -> Result<Table, Error>;
     /// Return the associated object store for a bucket
     fn object_store(&self, bucket: Bucket) -> Arc<dyn ObjectStore>;
-    /// Create a namespace in the catalog
-    fn database_url(&self) -> String;
-    fn as_any(&self) -> &dyn Any;
-    fn location(&self) -> String;
-    fn region(&self) -> String;
 }
 
 /// Trait to obtain a catalog by name
 #[async_trait::async_trait]
 pub trait CatalogList: Send + Sync + Debug {
     /// Get catalog from list by name
-    async fn catalog(&self, name: &str) -> Option<Arc<dyn Catalog>>;
+    fn catalog(&self, name: &str) -> Option<Arc<dyn Catalog>>;
     /// Get the list of available catalogs
     async fn list_catalogs(&self) -> Vec<String>;
+}
+
+pub mod identifier {
+    //! Catalog identifier
+    pub use iceberg_rust_spec::identifier::Identifier;
+}
+
+pub mod namespace {
+    //! Catalog namespace
+    pub use iceberg_rust_spec::namespace::Namespace;
 }

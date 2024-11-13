@@ -26,6 +26,9 @@ pub enum Error {
     /// Not supported
     #[error("Feature {0} is not supported.")]
     NotSupported(String),
+    /// Not found in catalog
+    #[error("Entity not found in catalog")]
+    CatalogNotFound,
     /// Iceberg spec error
     #[error(transparent)]
     Iceberg(#[from] iceberg_rust_spec::error::Error),
@@ -90,6 +93,17 @@ pub enum Error {
     /// version builder
     #[error(transparent)]
     VersionBuilder(#[from] iceberg_rust_spec::spec::view_metadata::VersionBuilderError),
+    /// create table builder
+    #[error(transparent)]
+    CreateTableBuilder(#[from] crate::catalog::create::CreateTableBuilderError),
+    /// create view builder
+    #[error(transparent)]
+    CreateViewBuilder(#[from] crate::catalog::create::CreateViewBuilderError),
+    /// create view builder
+    #[error(transparent)]
+    CreateMaterializedViewBuilder(
+        #[from] crate::catalog::create::CreateMaterializedViewBuilderError,
+    ),
 }
 
 impl From<Error> for ArrowError {

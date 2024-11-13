@@ -3,11 +3,20 @@ use datafusion::{datasource::TableProvider, error::DataFusionError};
 use futures::{executor::LocalPool, task::LocalSpawnExt};
 use std::{collections::HashSet, sync::Arc};
 
+use iceberg_rust::spec::{tabular::TabularMetadata, view_metadata::REF_PREFIX};
 use iceberg_rust::{
-    catalog::{identifier::Identifier, namespace::Namespace, tabular::Tabular, Catalog},
+    catalog::{
+        bucket::Bucket,
+        create::{CreateMaterializedView, CreateView},
+        identifier::Identifier,
+        namespace::Namespace,
+        tabular::Tabular,
+        Catalog,
+    },
     error::Error as IcebergError,
+    spec::table_metadata::new_metadata_location,
+    spec::util::strip_prefix,
 };
-use iceberg_rust_spec::spec::{tabular::TabularMetadata, view_metadata::REF_PREFIX};
 
 use crate::{error::Error, DataFusionTable};
 
@@ -19,6 +28,7 @@ enum Node {
     Relation(Identifier),
 }
 
+#[derive(Debug)]
 pub struct Mirror {
     storage: DashMap<String, Node>,
     catalog: Arc<dyn Catalog>,
@@ -56,6 +66,15 @@ impl Mirror {
             branch,
         })
     }
+    pub fn new_sync(catalog: Arc<dyn Catalog>, branch: Option<String>) -> Self {
+        let storage = DashMap::new();
+
+        Mirror {
+            storage,
+            catalog,
+            branch,
+        }
+    }
     /// Lists all tables in the given namespace.
     pub fn table_names(&self, namespace: &Namespace) -> Result<Vec<Identifier>, DataFusionError> {
         let node = self
@@ -74,8 +93,8 @@ impl Mirror {
             .filter_map(|r| {
                 let r = &self.storage.get(r)?;
                 match &r.value() {
-                    &Node::Relation(ident) => Some(ident.clone()),
-                    &Node::Namespace(_) => None,
+                    Node::Relation(ident) => Some(ident.clone()),
+                    Node::Namespace(_) => None,
                 }
             })
             .collect())
@@ -96,70 +115,77 @@ impl Mirror {
                         .as_slice(),
                 )
             })
-            .collect::<Result<_, IcebergError>>()
+            .collect::<Result<_, iceberg_rust::spec::error::Error>>()
             .map_err(|err| DataFusionError::Internal(format!("{}", err)))
     }
     pub async fn table(
         &self,
         identifier: Identifier,
     ) -> Result<Option<Arc<dyn TableProvider>>, DataFusionError> {
-        Ok(Some(
-            self.catalog
-                .clone()
-                .load_tabular(&identifier)
-                .await
-                .map(|tabular| match tabular {
-                    Tabular::Table(table) => {
-                        let end = self
-                            .branch
-                            .as_ref()
-                            .and_then(|branch| table.metadata().refs.get(branch))
-                            .map(|x| x.snapshot_id);
-                        Arc::new(DataFusionTable::new(
-                            Tabular::Table(table),
-                            None,
-                            end,
-                            self.branch.as_deref(),
-                        )) as Arc<dyn TableProvider>
-                    }
-                    Tabular::View(view) => {
-                        let end = self
-                            .branch
-                            .as_ref()
-                            .and_then(|branch| {
-                                view.metadata()
-                                    .properties
-                                    .get(&(REF_PREFIX.to_string() + &branch))
-                            })
-                            .map(|x| x.parse::<i64>().unwrap());
-                        Arc::new(DataFusionTable::new(
-                            Tabular::View(view),
-                            None,
-                            end,
-                            self.branch.as_deref(),
-                        )) as Arc<dyn TableProvider>
-                    }
-                    Tabular::MaterializedView(matview) => {
-                        let end = self
-                            .branch
-                            .as_ref()
-                            .and_then(|branch| {
-                                matview
-                                    .metadata()
-                                    .properties
-                                    .get(&(REF_PREFIX.to_string() + &branch))
-                            })
-                            .map(|x| x.parse::<i64>().unwrap());
-                        Arc::new(DataFusionTable::new(
-                            Tabular::MaterializedView(matview),
-                            None,
-                            end,
-                            self.branch.as_deref(),
-                        )) as Arc<dyn TableProvider>
-                    }
-                })
-                .map_err(Error::from)?,
-        ))
+        self.catalog
+            .clone()
+            .load_tabular(&identifier)
+            .await
+            .map(|tabular| match tabular {
+                Tabular::Table(table) => {
+                    let end = self
+                        .branch
+                        .as_ref()
+                        .and_then(|branch| table.metadata().refs.get(branch))
+                        .map(|x| x.snapshot_id);
+                    Arc::new(DataFusionTable::new(
+                        Tabular::Table(table),
+                        None,
+                        end,
+                        self.branch.as_deref(),
+                    )) as Arc<dyn TableProvider>
+                }
+                Tabular::View(view) => {
+                    let end = self
+                        .branch
+                        .as_ref()
+                        .and_then(|branch| {
+                            view.metadata()
+                                .properties
+                                .get(&(REF_PREFIX.to_string() + branch))
+                        })
+                        .map(|x| x.parse::<i64>().unwrap());
+                    Arc::new(DataFusionTable::new(
+                        Tabular::View(view),
+                        None,
+                        end,
+                        self.branch.as_deref(),
+                    )) as Arc<dyn TableProvider>
+                }
+                Tabular::MaterializedView(matview) => {
+                    let end = self
+                        .branch
+                        .as_ref()
+                        .and_then(|branch| {
+                            matview
+                                .metadata()
+                                .properties
+                                .get(&(REF_PREFIX.to_string() + branch))
+                        })
+                        .map(|x| x.parse::<i64>().unwrap());
+                    Arc::new(DataFusionTable::new(
+                        Tabular::MaterializedView(matview),
+                        None,
+                        end,
+                        self.branch.as_deref(),
+                    )) as Arc<dyn TableProvider>
+                }
+            })
+            .map(Some)
+            .or_else(|err| {
+                if matches!(err, IcebergError::CatalogNotFound) {
+                    Ok(None)
+                } else {
+                    Err(err)
+                }
+            })
+            .map_err(Error::from)
+            .map_err(DataFusionError::from)
     }
     pub fn table_exists(&self, identifier: Identifier) -> bool {
         self.storage.contains_key(&identifier.to_string())
@@ -182,7 +208,7 @@ impl Mirror {
             Node::Namespace(namespace) => {
                 namespace.insert(identifier.to_string());
             }
-            Node::Relation(_identifier) => {}
+            Node::Relation(_) => {}
         };
         let pool = LocalPool::new();
         let spawner = pool.spawner();
@@ -205,21 +231,59 @@ impl Mirror {
                         .metadata()
                         .to_owned();
                     match metadata {
-                        TabularMetadata::Table(metadata) => {
+                        TabularMetadata::Table(_) => {
+                            let metadata_location = new_metadata_location(&metadata);
+                            let object_store = cloned_catalog
+                                .object_store(Bucket::from_path(&metadata_location).unwrap());
+                            object_store
+                                .put(
+                                    &strip_prefix(&metadata_location).into(),
+                                    serde_json::to_vec(&metadata).unwrap().into(),
+                                )
+                                .await
+                                .unwrap();
                             cloned_catalog
-                                .create_table(identifier, metadata)
+                                .register_table(identifier, &metadata_location)
                                 .await
                                 .unwrap();
                         }
                         TabularMetadata::View(metadata) => {
+                            let name = identifier.name().to_owned();
+                            let view_version =
+                                metadata.versions[&metadata.current_version_id].clone();
                             cloned_catalog
-                                .create_view(identifier, metadata)
+                                .create_view(
+                                    identifier,
+                                    CreateView {
+                                        name,
+                                        location: Some(metadata.location),
+                                        schema: metadata.schemas[&view_version.schema_id].clone(),
+                                        view_version,
+                                        properties: metadata.properties,
+                                    },
+                                )
                                 .await
                                 .unwrap();
                         }
                         TabularMetadata::MaterializedView(metadata) => {
+                            let name = identifier.name().to_owned();
+                            let view_version =
+                                metadata.versions[&metadata.current_version_id].clone();
                             cloned_catalog
-                                .create_materialized_view(identifier, metadata)
+                                .create_materialized_view(
+                                    identifier,
+                                    CreateMaterializedView {
+                                        name,
+                                        location: Some(metadata.location),
+                                        schema: metadata.schemas[&view_version.schema_id].clone(),
+                                        view_version,
+                                        properties: metadata.properties,
+                                        partition_spec: None,
+                                        write_order: None,
+                                        stage_create: None,
+                                        table_properties: None,
+                                    },
+                                )
                                 .await
                                 .unwrap();
                         }
@@ -244,7 +308,7 @@ impl Mirror {
             Node::Namespace(namespace) => {
                 namespace.remove(&identifier.to_string());
             }
-            Node::Relation(_identifier) => {}
+            Node::Relation(_) => {}
         };
         let pool = LocalPool::new();
         let spawner = pool.spawner();
@@ -256,5 +320,9 @@ impl Mirror {
             .map_err(|err| DataFusionError::Internal(format!("{}", err)))?;
         // Currently can't synchronously return a table which has to be fetched asynchronously
         Ok(None)
+    }
+
+    pub fn catalog(&self) -> Arc<dyn Catalog> {
+        self.catalog.clone()
     }
 }

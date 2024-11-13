@@ -4,9 +4,9 @@
 
 use std::collections::HashMap;
 
-use iceberg_rust_spec::spec::{
-    manifest::DataFile, materialized_view_metadata::SourceTable, types::StructType,
-    view_metadata::ViewRepresentation,
+use iceberg_rust_spec::{
+    materialized_view_metadata::{RefreshState, REFRESH_STATE},
+    spec::{manifest::DataFile, types::StructType, view_metadata::ViewRepresentation},
 };
 
 use crate::{
@@ -63,26 +63,37 @@ impl<'view> Transaction<'view> {
     }
 
     /// Perform full refresh operation
-    pub fn full_refresh(mut self, files: Vec<DataFile>, lineage: Vec<SourceTable>) -> Self {
+    pub fn full_refresh(
+        mut self,
+        files: Vec<DataFile>,
+        refresh_state: RefreshState,
+    ) -> Result<Self, Error> {
+        let refresh_state = serde_json::to_string(&refresh_state)?;
         self.storage_table_operations
             .entry(REWRITE_KEY.to_owned())
             .and_modify(|mut x| {
                 if let TableOperation::Rewrite {
                     branch: _,
                     files: old,
-                    lineage: old_lineage,
+                    additional_summary: old_lineage,
                 } = &mut x
                 {
                     old.extend_from_slice(&files);
-                    *old_lineage = Some(lineage.clone());
+                    *old_lineage = Some(HashMap::from_iter(vec![(
+                        REFRESH_STATE.to_owned(),
+                        refresh_state.clone(),
+                    )]));
                 }
             })
             .or_insert(TableOperation::Rewrite {
                 branch: self.branch.clone(),
                 files,
-                lineage: Some(lineage),
+                additional_summary: Some(HashMap::from_iter(vec![(
+                    REFRESH_STATE.to_owned(),
+                    refresh_state,
+                )])),
             });
-        self
+        Ok(self)
     }
 
     /// Commit the transaction to perform the [Operation]s with ACID guarantees.
@@ -97,14 +108,11 @@ impl<'view> Transaction<'view> {
             let storage_table = self.materialized_view.storage_table().await?;
 
             // Save old metadata to be able to remove old data after a rewrite operation
-            let delete_data = if self.storage_table_operations.values().any(|x| match x {
-                TableOperation::Rewrite {
-                    branch: _,
-                    files: _,
-                    lineage: _,
-                } => true,
-                _ => false,
-            }) {
+            let delete_data = if self
+                .storage_table_operations
+                .values()
+                .any(|x| matches!(x, TableOperation::Rewrite { .. }))
+            {
                 Some(storage_table.metadata().clone())
             } else {
                 None
@@ -114,8 +122,7 @@ impl<'view> Transaction<'view> {
             for operation in self.storage_table_operations.into_values() {
                 let (requirement, update) = operation
                     .execute(
-                        &storage_table,
-                        &storage_table.metadata(),
+                        storage_table.metadata(),
                         self.materialized_view.object_store(),
                     )
                     .await?;

@@ -1,13 +1,10 @@
 /*!
  * Manifest lists
- */
+*/
 
-use std::{
-    io::Read,
-    iter::{repeat, Map, Repeat, Zip},
-};
+use std::sync::OnceLock;
 
-use apache_avro::{types::Value as AvroValue, Reader as AvroReader, Schema as AvroSchema};
+use apache_avro::{types::Value as AvroValue, Schema as AvroSchema};
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -21,38 +18,6 @@ use super::{
     types::Type,
     values::Value,
 };
-
-type ReaderZip<'a, 'metadata, R> = Zip<AvroReader<'a, R>, Repeat<&'metadata TableMetadata>>;
-type ReaderMap<'a, 'metadata, R> = Map<
-    ReaderZip<'a, 'metadata, R>,
-    fn((Result<AvroValue, apache_avro::Error>, &TableMetadata)) -> Result<ManifestListEntry, Error>,
->;
-
-/// Iterator of ManifestFileEntries
-pub struct ManifestListReader<'a, 'metadata, R: Read> {
-    reader: ReaderMap<'a, 'metadata, R>,
-}
-
-impl<'a, 'metadata, R: Read> Iterator for ManifestListReader<'a, 'metadata, R> {
-    type Item = Result<ManifestListEntry, Error>;
-    fn next(&mut self) -> Option<Self::Item> {
-        self.reader.next()
-    }
-}
-
-impl<'a, 'metadata, R: Read> ManifestListReader<'a, 'metadata, R> {
-    /// Create a new ManifestFile reader
-    pub fn new(
-        reader: R,
-        table_metadata: &'metadata TableMetadata,
-    ) -> Result<Self, apache_avro::Error> {
-        Ok(Self {
-            reader: AvroReader::new(reader)?
-                .zip(repeat(table_metadata))
-                .map(avro_value_to_manifest_file),
-        })
-    }
-}
 
 #[derive(Debug, Serialize, PartialEq, Eq, Clone)]
 #[serde(into = "ManifestListEntryEnum")]
@@ -155,11 +120,11 @@ mod _serde {
         /// ID of the snapshot where the manifest file was added
         pub added_snapshot_id: i64,
         /// Number of entries in the manifest that have status ADDED (1), when null this is assumed to be non-zero
-        pub added_data_files_count: i32,
+        pub added_files_count: i32,
         /// Number of entries in the manifest that have status EXISTING (0), when null this is assumed to be non-zero
-        pub existing_data_files_count: i32,
+        pub existing_files_count: i32,
         /// Number of entries in the manifest that have status DELETED (2), when null this is assumed to be non-zero
-        pub deleted_data_files_count: i32,
+        pub deleted_files_count: i32,
         /// Number of rows in all of files in the manifest that have status ADDED, when null this is assumed to be non-zero
         pub added_rows_count: i64,
         /// Number of rows in all of files in the manifest that have status EXISTING, when null this is assumed to be non-zero
@@ -185,11 +150,11 @@ mod _serde {
         /// ID of the snapshot where the manifest file was added
         pub added_snapshot_id: i64,
         /// Number of entries in the manifest that have status ADDED (1), when null this is assumed to be non-zero
-        pub added_data_files_count: Option<i32>,
+        pub added_files_count: Option<i32>,
         /// Number of entries in the manifest that have status EXISTING (0), when null this is assumed to be non-zero
-        pub existing_data_files_count: Option<i32>,
+        pub existing_files_count: Option<i32>,
         /// Number of entries in the manifest that have status DELETED (2), when null this is assumed to be non-zero
-        pub deleted_data_files_count: Option<i32>,
+        pub deleted_files_count: Option<i32>,
         /// Number of rows in all of files in the manifest that have status ADDED, when null this is assumed to be non-zero
         pub added_rows_count: Option<i64>,
         /// Number of rows in all of files in the manifest that have status EXISTING, when null this is assumed to be non-zero
@@ -218,9 +183,9 @@ mod _serde {
                 manifest_length: value.manifest_length,
                 partition_spec_id: value.partition_spec_id,
                 added_snapshot_id: value.added_snapshot_id,
-                added_data_files_count: value.added_files_count,
-                existing_data_files_count: value.existing_files_count,
-                deleted_data_files_count: value.deleted_files_count,
+                added_files_count: value.added_files_count,
+                existing_files_count: value.existing_files_count,
+                deleted_files_count: value.deleted_files_count,
                 added_rows_count: value.added_rows_count,
                 existing_rows_count: value.existing_rows_count,
                 deleted_rows_count: value.deleted_rows_count,
@@ -242,9 +207,9 @@ mod _serde {
                 sequence_number: value.sequence_number,
                 min_sequence_number: value.min_sequence_number,
                 added_snapshot_id: value.added_snapshot_id,
-                added_data_files_count: value.added_files_count.unwrap(),
-                existing_data_files_count: value.existing_files_count.unwrap(),
-                deleted_data_files_count: value.deleted_files_count.unwrap(),
+                added_files_count: value.added_files_count.unwrap(),
+                existing_files_count: value.existing_files_count.unwrap(),
+                deleted_files_count: value.deleted_files_count.unwrap(),
                 added_rows_count: value.added_rows_count.unwrap(),
                 existing_rows_count: value.existing_rows_count.unwrap(),
                 deleted_rows_count: value.deleted_rows_count.unwrap(),
@@ -298,7 +263,7 @@ impl ManifestListEntry {
         }
     }
 
-    pub(crate) fn try_from_v2(
+    pub fn try_from_v2(
         entry: _serde::ManifestListEntryV2,
         table_metadata: &TableMetadata,
     ) -> Result<ManifestListEntry, Error> {
@@ -323,9 +288,9 @@ impl ManifestListEntry {
             sequence_number: entry.sequence_number,
             min_sequence_number: entry.min_sequence_number,
             added_snapshot_id: entry.added_snapshot_id,
-            added_files_count: Some(entry.added_data_files_count),
-            existing_files_count: Some(entry.existing_data_files_count),
-            deleted_files_count: Some(entry.deleted_data_files_count),
+            added_files_count: Some(entry.added_files_count),
+            existing_files_count: Some(entry.existing_files_count),
+            deleted_files_count: Some(entry.deleted_files_count),
             added_rows_count: Some(entry.added_rows_count),
             existing_rows_count: Some(entry.existing_rows_count),
             deleted_rows_count: Some(entry.deleted_rows_count),
@@ -342,7 +307,7 @@ impl ManifestListEntry {
         })
     }
 
-    pub(crate) fn try_from_v1(
+    pub fn try_from_v1(
         entry: _serde::ManifestListEntryV1,
         table_metadata: &TableMetadata,
     ) -> Result<ManifestListEntry, Error> {
@@ -367,9 +332,9 @@ impl ManifestListEntry {
             sequence_number: 0,
             min_sequence_number: 0,
             added_snapshot_id: entry.added_snapshot_id,
-            added_files_count: entry.added_data_files_count,
-            existing_files_count: entry.existing_data_files_count,
-            deleted_files_count: entry.deleted_data_files_count,
+            added_files_count: entry.added_files_count,
+            existing_files_count: entry.existing_files_count,
+            deleted_files_count: entry.deleted_files_count,
             added_rows_count: entry.added_rows_count,
             existing_rows_count: entry.existing_rows_count,
             deleted_rows_count: entry.deleted_rows_count,
@@ -404,11 +369,11 @@ impl FieldSummary {
     }
 }
 
-impl ManifestListEntry {
-    /// Get schema of the manifest list
-    pub fn schema(format_version: &FormatVersion) -> Result<AvroSchema, Error> {
-        let schema = match format_version {
-            FormatVersion::V1 => r#"
+pub fn manifest_list_schema_v1() -> &'static AvroSchema {
+    static MANIFEST_LIST_SCHEMA_V1: OnceLock<AvroSchema> = OnceLock::new();
+    MANIFEST_LIST_SCHEMA_V1.get_or_init(|| {
+        AvroSchema::parse_str(
+            r#"
         {
             "type": "record",
             "name": "manifest_file",
@@ -544,9 +509,16 @@ impl ManifestListEntry {
                 }
             ]
         }
-        "#
-                .to_owned(),
-            &FormatVersion::V2 => r#"
+        "#,
+        )
+        .unwrap()
+    })
+}
+pub fn manifest_list_schema_v2() -> &'static AvroSchema {
+    static MANIFEST_LIST_SCHEMA_V2: OnceLock<AvroSchema> = OnceLock::new();
+    MANIFEST_LIST_SCHEMA_V2.get_or_init(|| {
+        AvroSchema::parse_str(
+            r#"
         {
             "type": "record",
             "name": "manifest_file",
@@ -673,19 +645,18 @@ impl ManifestListEntry {
                 }
             ]
         }
-        "#
-                .to_owned(),
-        };
-        AvroSchema::parse_str(&schema).map_err(Into::into)
-    }
+        "#,
+        )
+        .unwrap()
+    })
 }
 
-/// Convert an avro value to a [ManifestFile] according to the provided format version
-pub(crate) fn avro_value_to_manifest_file(
-    value: (Result<AvroValue, apache_avro::Error>, &TableMetadata),
+/// Convert an avro value result to a manifest list version according to the provided format version
+pub fn avro_value_to_manifest_list_entry(
+    value: Result<AvroValue, apache_avro::Error>,
+    table_metadata: &TableMetadata,
 ) -> Result<ManifestListEntry, Error> {
-    let entry = value.0?;
-    let table_metadata = value.1;
+    let entry = value?;
     match table_metadata.format_version {
         FormatVersion::V1 => ManifestListEntry::try_from_v1(
             apache_avro::from_value::<_serde::ManifestListEntryV1>(&entry)?,
@@ -706,7 +677,7 @@ mod tests {
     use super::*;
 
     use crate::spec::{
-        partition::{PartitionField, PartitionSpecBuilder, Transform},
+        partition::{PartitionField, PartitionSpec, Transform},
         schema::Schema,
         table_metadata::TableMetadataBuilder,
         types::{PrimitiveType, StructField, StructType},
@@ -736,11 +707,10 @@ mod tests {
                     .build()
                     .unwrap(),
             )]))
-            .default_spec_id(1)
+            .default_spec_id(0)
             .partition_specs(HashMap::from_iter(vec![(
-                1,
-                PartitionSpecBuilder::default()
-                    .with_spec_id(1)
+                0,
+                PartitionSpec::builder()
                     .with_partition_field(PartitionField::new(0, 1000, "day", Transform::Day))
                     .build()
                     .unwrap(),
@@ -766,15 +736,15 @@ mod tests {
             partitions: Some(vec![FieldSummary {
                 contains_null: true,
                 contains_nan: Some(false),
-                lower_bound: Some(Value::Date(1234)),
-                upper_bound: Some(Value::Date(76890)),
+                lower_bound: Some(Value::Int(1234)),
+                upper_bound: Some(Value::Int(76890)),
             }]),
             key_metadata: None,
         };
 
-        let schema = ManifestListEntry::schema(&FormatVersion::V2).unwrap();
+        let schema = manifest_list_schema_v2();
 
-        let mut writer = apache_avro::Writer::new(&schema, Vec::new());
+        let mut writer = apache_avro::Writer::new(schema, Vec::new());
 
         writer.append_ser(manifest_file.clone()).unwrap();
 
@@ -817,11 +787,10 @@ mod tests {
                     .build()
                     .unwrap(),
             )]))
-            .default_spec_id(1)
+            .default_spec_id(0)
             .partition_specs(HashMap::from_iter(vec![(
-                1,
-                PartitionSpecBuilder::default()
-                    .with_spec_id(1)
+                0,
+                PartitionSpec::builder()
                     .with_partition_field(PartitionField::new(0, 1000, "day", Transform::Day))
                     .build()
                     .unwrap(),
@@ -847,15 +816,15 @@ mod tests {
             partitions: Some(vec![FieldSummary {
                 contains_null: true,
                 contains_nan: Some(false),
-                lower_bound: Some(Value::Date(1234)),
-                upper_bound: Some(Value::Date(76890)),
+                lower_bound: Some(Value::Int(1234)),
+                upper_bound: Some(Value::Int(76890)),
             }]),
             key_metadata: None,
         };
 
-        let schema = ManifestListEntry::schema(&FormatVersion::V1).unwrap();
+        let schema = manifest_list_schema_v1();
 
-        let mut writer = apache_avro::Writer::new(&schema, Vec::new());
+        let mut writer = apache_avro::Writer::new(schema, Vec::new());
 
         writer.append_ser(manifest_file.clone()).unwrap();
 

@@ -2,14 +2,8 @@
  * Defines the [Transaction] type that performs multiple [Operation]s with ACID properties.
 */
 use std::collections::HashMap;
-use std::sync::Arc;
 
-use iceberg_rust_spec::spec::{
-    manifest::DataFile, materialized_view_metadata::SourceTable, schema::Schema,
-    snapshot::SnapshotReference,
-};
-
-use datafusion::physical_expr::PhysicalExpr;
+use iceberg_rust_spec::spec::{manifest::DataFile, schema::Schema, snapshot::SnapshotReference};
 
 use crate::{catalog::commit::CommitTable, error::Error, table::Table};
 
@@ -17,11 +11,11 @@ use self::operation::Operation;
 
 use super::delete_files;
 
+pub(crate) mod append;
 pub(crate) mod operation;
 
 pub(crate) static APPEND_KEY: &str = "append";
 pub(crate) static REWRITE_KEY: &str = "rewrite";
-pub(crate) static OVERWRITE_KEY: &str = "overwrite";
 pub(crate) static ADD_SCHEMA_KEY: &str = "add-schema";
 pub(crate) static SET_DEFAULT_SPEC_KEY: &str = "set-default-spec";
 pub(crate) static UPDATE_PROPERTIES_KEY: &str = "update-properties";
@@ -62,40 +56,23 @@ impl<'table> TableTransaction<'table> {
         self.operations
             .entry(APPEND_KEY.to_owned())
             .and_modify(|mut x| {
-                if let Operation::NewAppend {
+                if let Operation::Append {
                     branch: _,
                     files: old,
-                    lineage: None,
+                    additional_summary: None,
                 } = &mut x
                 {
                     old.extend_from_slice(&files)
                 }
             })
-            .or_insert(Operation::NewAppend {
+            .or_insert(Operation::Append {
                 branch: self.branch.clone(),
                 files,
-                lineage: None,
+                additional_summary: None,
             });
         self
     }
-    /// Quickly Update table for UPDATE/DELETE operations
-    pub fn overwrite(
-        mut self,
-        filter: Option<Arc<dyn PhysicalExpr>>,
-        new_files: Vec<DataFile>,
-    ) -> Self {
-        self.operations.insert(
-            OVERWRITE_KEY.to_owned(),
-            Operation::Filter {
-                branch: self.branch.clone(),
-                filter,
-                lineage: None,
-                new_files,
-            },
-        );
-        self
-    }
-    /// Quickly rewrite files on the table
+    /// Quickly append files to the table
     pub fn rewrite(mut self, files: Vec<DataFile>) -> Self {
         self.operations
             .entry(REWRITE_KEY.to_owned())
@@ -103,7 +80,7 @@ impl<'table> TableTransaction<'table> {
                 if let Operation::Rewrite {
                     branch: _,
                     files: old,
-                    lineage: None,
+                    additional_summary: None,
                 } = &mut x
                 {
                     old.extend_from_slice(&files)
@@ -112,29 +89,33 @@ impl<'table> TableTransaction<'table> {
             .or_insert(Operation::Rewrite {
                 branch: self.branch.clone(),
                 files,
-                lineage: None,
+                additional_summary: None,
             });
         self
     }
-    /// Quickly rewrite files on the table while preserving lineage
-    pub fn rewrite_with_lineage(mut self, files: Vec<DataFile>, lineage: Vec<SourceTable>) -> Self {
+    /// Quickly append files to the table
+    pub fn rewrite_with_lineage(
+        mut self,
+        files: Vec<DataFile>,
+        additional_summary: HashMap<String, String>,
+    ) -> Self {
         self.operations
             .entry(REWRITE_KEY.to_owned())
             .and_modify(|mut x| {
                 if let Operation::Rewrite {
                     branch: _,
                     files: old,
-                    lineage: old_lineage,
+                    additional_summary: old_lineage,
                 } = &mut x
                 {
                     old.extend_from_slice(&files);
-                    *old_lineage = Some(lineage.clone());
+                    *old_lineage = Some(additional_summary.clone());
                 }
             })
             .or_insert(Operation::Rewrite {
                 branch: self.branch.clone(),
                 files,
-                lineage: Some(lineage),
+                additional_summary: Some(additional_summary),
             });
         self
     }
@@ -171,7 +152,7 @@ impl<'table> TableTransaction<'table> {
                 Operation::Rewrite {
                     branch: _,
                     files: _,
-                    lineage: _,
+                    additional_summary: _,
                 }
             )
         }) {
@@ -184,12 +165,8 @@ impl<'table> TableTransaction<'table> {
         let (mut requirements, mut updates) = (Vec::new(), Vec::new());
         for operation in self.operations.into_values() {
             let (requirement, update) = operation
-                .execute(self.table, self.table.metadata(), self.table.object_store())
-                .await
-                .map_err(|e| {
-                    println!("Error executing table operation: {:?}", e);
-                    e
-                })?;
+                .execute(self.table.metadata(), self.table.object_store())
+                .await?;
 
             if let Some(requirement) = requirement {
                 requirements.push(requirement);

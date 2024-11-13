@@ -10,6 +10,9 @@
       <sourceFolder url="file://$MODULE_DIR$/iceberg-sql-catalog/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/scratch-bin-files/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/iceberg-glue-catalog/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/datafusion_iceberg/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/iceberg-file-catalog/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/iceberg-rest-catalog/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

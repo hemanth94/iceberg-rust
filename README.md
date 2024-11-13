@@ -4,6 +4,17 @@ Apache Iceberg is Open Table Format that brings ACID quarantees to large analyti
 This repository contains a Rust implementation of Apache Iceberg that focuses on the interoperability with the Arrow ecosystem.
 It provides an Iceberg integration for the [Datafusion](https://arrow.apache.org/datafusion/) query engine.
 
+[![Crates.io][crates-badge]][crates-url]
+[![Apache V2.0 licensed][apache-badge]][apache-url]
+[![Build Status][actions-badge]][actions-url]
+
+[crates-badge]: https://img.shields.io/crates/v/iceberg-rust
+[crates-url]: https://crates.io/crates/iceberg-rust
+[apache-badge]: https://img.shields.io/badge/License-Apache_2.0-blue.svg
+[apache-url]: https://github.com/JanKaul/iceberg-rust/blob/main/LICENSE
+[actions-badge]: https://github.com/JanKaul/iceberg-rust/actions/workflows/rust.yml/badge.svg?branch=main
+[actions-url]: https://github.com/JanKaul/iceberg-rust/actions/workflows/rust.yml
+
 ## Features
 
 ### Iceberg tables
@@ -32,6 +43,7 @@ It provides an Iceberg integration for the [Datafusion](https://arrow.apache.org
 
 ### Catalogs
 
+- REST
 - RDBMS (Postgres, MySQL)
 
 ### File formats
@@ -52,11 +64,11 @@ use datafusion_iceberg::DataFusionTable;
 use iceberg_rust::{
     catalog::Catalog,
     spec::{
-        partition::{PartitionField, PartitionSpecBuilder, Transform},
+        partition::{PartitionField, PartitionSpec, Transform},
         schema::Schema,
         types::{PrimitiveType, StructField, StructType, Type},
     },
-    table::table_builder::TableBuilder,
+    table::Table,
 };
 use iceberg_sql_catalog::SqlCatalog;
 use object_store::memory::InMemory;
@@ -75,7 +87,6 @@ pub(crate) async fn main() {
     );
 
     let schema = Schema::builder()
-        .with_schema_id(1)
         .with_fields(
             StructType::builder()
                 .with_struct_field(StructField {
@@ -119,23 +130,21 @@ pub(crate) async fn main() {
         .build()
         .unwrap();
 
-    let partition_spec = PartitionSpecBuilder::default()
-        .with_spec_id(1)
+    let partition_spec = PartitionSpec::builder()
         .with_partition_field(PartitionField::new(4, 1000, "day", Transform::Day))
         .build()
         .expect("Failed to create partition spec");
 
-    let mut builder =
-        TableBuilder::new("test.orders", catalog).expect("Failed to create table builder");
-    builder
-        .location("/test/orders")
-        .with_schema((1, schema))
-        .current_schema_id(1)
-        .with_partition_spec((1, partition_spec))
-        .default_spec_id(1);
-    let table = Arc::new(DataFusionTable::from(
-        builder.build().await.expect("Failed to create table."),
-    ));
+    let table = Table::builder()
+        .with_name("orders")
+        .with_location("/test/orders")
+        .with_schema(schema)
+        .with_partition_spec(partition_spec)
+        .build(&["test".to_owned()], catalog)
+        .await
+        .expect("Failed to create table");
+
+    let table = Arc::new(DataFusionTable::from(table));
 
     let ctx = SessionContext::new();
 

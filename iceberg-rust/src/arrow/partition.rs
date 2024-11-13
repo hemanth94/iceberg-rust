@@ -27,7 +27,7 @@ use futures::{
 };
 use itertools::{iproduct, Itertools};
 
-use iceberg_rust_spec::spec::{partition::PartitionSpec, schema::Schema, values::Value};
+use iceberg_rust_spec::{partition::BoundPartitionField, spec::values::Value};
 
 use super::transform::transform_arrow;
 
@@ -39,16 +39,18 @@ type RecordBatchSender = UnboundedSender<Result<RecordBatch, ArrowError>>;
 /// Partition stream of record batches according to partition spec
 pub async fn partition_record_batches(
     record_batches: impl Stream<Item = Result<RecordBatch, ArrowError>> + Send,
-    partition_spec: &PartitionSpec,
-    schema: &Schema,
+    partition_fields: &[BoundPartitionField<'_>],
 ) -> Result<
-    Vec<(
-        Vec<Value>,
-        impl Stream<Item = Result<RecordBatch, ArrowError>> + Send,
-    )>,
+    impl Stream<
+        Item = (
+            Vec<Value>,
+            impl Stream<Item = Result<RecordBatch, ArrowError>> + Send,
+        ),
+    >,
     ArrowError,
 > {
-    let (partition_sender, partition_reciever): (
+    #[allow(clippy::type_complexity)]
+    let (partition_sender, partition_receiver): (
         UnboundedSender<(Vec<Value>, SendableRecordBatchStream)>,
         UnboundedReceiver<(Vec<Value>, SendableRecordBatchStream)>,
     ) = unbounded();
@@ -59,17 +61,11 @@ pub async fn partition_record_batches(
             let partition_streams = partition_streams.clone();
             let partition_sender = partition_sender.clone();
             async move {
-                let partition_columns: Vec<ArrayRef> = partition_spec
-                    .fields()
+                let partition_columns: Vec<ArrayRef> = partition_fields
                     .iter()
                     .map(|field| {
-                        let column_name = &schema
-                            .fields()
-                            .get(*field.source_id() as usize)
-                            .ok_or(ArrowError::SchemaError("Column doesn't exist".to_string()))?
-                            .name;
                         let array = record_batch
-                            .column_by_name(column_name)
+                            .column_by_name(field.source_name())
                             .ok_or(ArrowError::SchemaError("Column doesn't exist".to_string()))?;
                         transform_arrow(array.clone(), field.transform())
                     })
@@ -165,8 +161,7 @@ pub async fn partition_record_batches(
         .into_values()
         .for_each(|sender| sender.close_channel());
     partition_sender.close_channel();
-    let recievers = partition_reciever.collect().await;
-    Ok(recievers)
+    Ok(partition_receiver)
 }
 
 fn distinct_values(array: ArrayRef) -> Result<DistinctValues, ArrowError> {
@@ -227,11 +222,16 @@ mod tests {
         record_batch::RecordBatch,
     };
 
-    use iceberg_rust_spec::spec::{
-        partition::{PartitionField, PartitionSpecBuilder, Transform},
-        schema::Schema,
-        types::{PrimitiveType, StructField, StructType, Type},
+    use iceberg_rust_spec::{
+        partition::BoundPartitionField,
+        spec::{
+            partition::{PartitionField, PartitionSpec, Transform},
+            schema::Schema,
+            types::{PrimitiveType, StructField, StructType, Type},
+        },
     };
+
+    use crate::error::Error;
 
     use super::partition_record_batches;
 
@@ -302,15 +302,29 @@ mod tests {
             .build()
             .unwrap();
 
-        let partition_spec = PartitionSpecBuilder::default()
-            .with_spec_id(0)
+        let partition_spec = PartitionSpec::builder()
             .with_partition_field(PartitionField::new(1, 1001, "x", Transform::Identity))
             .build()
             .unwrap();
-        let streams = partition_record_batches(record_batches, &partition_spec, &schema)
+        let partition_fields = partition_spec
+            .fields()
+            .iter()
+            .map(|partition_field| {
+                let field =
+                    schema
+                        .get(*partition_field.source_id() as usize)
+                        .ok_or(Error::NotFound(
+                            "Field".to_owned(),
+                            partition_field.source_id().to_string(),
+                        ))?;
+                Ok(BoundPartitionField::new(partition_field, field))
+            })
+            .collect::<Result<Vec<_>, Error>>()
+            .unwrap();
+        let streams = partition_record_batches(record_batches, &partition_fields)
             .await
             .unwrap();
-        let output = stream::iter(streams.into_iter())
+        let output = streams
             .then(|s| async move { s.1.collect::<Vec<_>>().await })
             .collect::<Vec<_>>()
             .await;

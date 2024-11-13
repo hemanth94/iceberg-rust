@@ -2,7 +2,10 @@
  * Partitioning
 */
 
-use std::{fmt, str};
+use std::{
+    fmt::{self, Display},
+    str,
+};
 
 use derive_getters::Getters;
 use serde::{
@@ -12,9 +15,11 @@ use serde::{
 
 use derive_builder::Builder;
 
-use crate::error::Error;
+use crate::{error::Error, types::StructField};
 
 use super::types::{StructType, Type};
+
+pub static DEFAULT_PARTITION_SPEC_ID: i32 = 0;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "lowercase", remote = "Self")]
@@ -111,6 +116,21 @@ where
     serializer.serialize_str(&format!("truncate[{value}]"))
 }
 
+impl Display for Transform {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Transform::Identity => write!(f, "identity"),
+            Transform::Year => write!(f, "year"),
+            Transform::Month => write!(f, "month"),
+            Transform::Day => write!(f, "day"),
+            Transform::Hour => write!(f, "hour"),
+            Transform::Bucket(i) => write!(f, "bucket[{}]", i),
+            Transform::Truncate(i) => write!(f, "truncate[{}]", i),
+            Transform::Void => write!(f, "void"),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Getters)]
 #[serde(rename_all = "kebab-case")]
 /// Partition fields capture the transform from table data to partition values.
@@ -144,6 +164,7 @@ impl PartitionField {
 ///  Partition spec that defines how to produce a tuple of partition values from a record.
 pub struct PartitionSpec {
     /// Identifier for PartitionSpec
+    #[builder(default = "DEFAULT_PARTITION_SPEC_ID")]
     spec_id: i32,
     /// Details of the partition spec
     #[builder(setter(each(name = "with_partition_field")))]
@@ -162,10 +183,13 @@ impl PartitionSpec {
             .map(|field| {
                 schema
                     .get(field.source_id as usize)
-                    .map(|x| x.field_type.clone())
+                    .ok_or(Error::NotFound(
+                        "Partition field".to_owned(),
+                        field.name.clone(),
+                    ))
+                    .and_then(|x| x.field_type.clone().tranform(&field.transform))
             })
-            .collect::<Option<Vec<_>>>()
-            .ok_or(Error::InvalidFormat("partition spec".to_string()))
+            .collect::<Result<Vec<_>, Error>>()
     }
 }
 
@@ -174,7 +198,7 @@ impl fmt::Display for PartitionSpec {
         write!(
             f,
             "{}",
-            &serde_json::to_string(self).map_err(|_| fmt::Error::default())?,
+            &serde_json::to_string(self).map_err(|_| fmt::Error)?,
         )
     }
 }
@@ -183,6 +207,61 @@ impl str::FromStr for PartitionSpec {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         serde_json::from_str(s).map_err(Error::from)
+    }
+}
+
+#[derive(Debug)]
+pub struct BoundPartitionField<'a> {
+    partition_field: &'a PartitionField,
+    struct_field: &'a StructField,
+}
+
+impl<'a> BoundPartitionField<'a> {
+    pub fn new(partition_field: &'a PartitionField, struct_field: &'a StructField) -> Self {
+        Self {
+            partition_field,
+            struct_field,
+        }
+    }
+
+    /// Name of partition field
+    pub fn name(&self) -> &str {
+        &self.partition_field.name
+    }
+
+    /// Name of source field
+    pub fn source_name(&self) -> &str {
+        &self.struct_field.name
+    }
+
+    /// Datatype of source field
+    pub fn field_type(&self) -> &Type {
+        &self.struct_field.field_type
+    }
+
+    /// Datatype of source field
+    pub fn transform(&self) -> &Transform {
+        &self.partition_field.transform
+    }
+
+    /// Field id if partition field
+    pub fn field_id(&self) -> i32 {
+        self.partition_field.field_id
+    }
+
+    /// Field id if partition field
+    pub fn source_id(&self) -> i32 {
+        self.partition_field.source_id
+    }
+
+    /// Field id if partition field
+    pub fn required(&self) -> bool {
+        self.struct_field.required
+    }
+
+    /// Partition field
+    pub fn partition_field(&self) -> &PartitionField {
+        self.partition_field
     }
 }
 

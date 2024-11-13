@@ -1,16 +1,16 @@
 [package]
 name = "iceberg-rust"
-version = "0.3.0"
+version = "0.5.8"
 edition = "2021"
 
-description = "Rust implementation of Apache Iceberg"
+description = "Unofficial rust implementation of the Iceberg table format"
 
 license = "Apache-2.0"
 
 repository = "https://github.com/JanKaul/iceberg-rust"
 
 [dependencies]
-apache-avro = "0.16.0"
+apache-avro = { workspace = true }
 arrow = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
@@ -28,9 +28,7 @@ derive_builder = "0.12.0"
 sqlparser = { workspace = true }
 thrift = { version = "0.17.0", default-features = false }
 thiserror = { workspace = true }
-iceberg-rust-spec = { path = "../iceberg-rust-spec", version = "0.3.0" }
-datafusion = { workspace = true }
-datafusion-expr = { workspace = true }
-dotenv = "0.15.0"
-aws-sdk-ec2 = "1.78.0"
-dirs = { version = "5.0.1", features = [] }
+derive-getters = { workspace = true }
+iceberg-rust-spec = { path = "../iceberg-rust-spec", version = "0.5.8" }
+smallvec = { version = "1.13.2", features = ["const_generics"] }
+
