@@ -25,6 +25,7 @@ use datafusion::{
         listing::PartitionedFile,
         object_store::ObjectStoreUrl,
         physical_plan::FileScanConfig,
+
         TableProvider, ViewTable,
     },
     execution::{context::SessionState, TaskContext},
@@ -33,6 +34,8 @@ use datafusion::{
     physical_optimizer::pruning::PruningPredicate,
     physical_plan::{
         insert::{DataSink, DataSinkExec},
+        upsert::{OverwriteSink, UpdateSinkExec},
+        delete::DeleteSinkExec,
         metrics::MetricsSet,
         DisplayAs, DisplayFormatType, ExecutionPlan, SendableRecordBatchStream, Statistics,
     },
@@ -60,6 +63,9 @@ use iceberg_rust::{
     arrow::write::write_parquet_partitioned, catalog::tabular::Tabular,
     materialized_view::MaterializedView, table::Table, view::View,
 };
+
+use datafusion::physical_plan::PhysicalExpr;
+use datafusion_expr::FilterOp;
 // mod value;
 
 #[derive(Debug, Clone)]
@@ -228,6 +234,57 @@ impl TableProvider for DataFusionTable {
             return not_impl_err!("Overwrite not implemented for MemoryTable yet");
         };
         Ok(Arc::new(DataSinkExec::new(
+            input,
+            Arc::new(self.clone().into_data_sink()),
+            self.schema.clone(),
+            None,
+        )))
+    }
+
+    async fn update_table(
+        &self,
+        _state: &dyn Session,
+        input_plan: Arc<dyn ExecutionPlan>,
+        overwrite: bool,
+    ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
+        // Create Physical Execution Plan for UPDATE node
+        // on top of Physical Execution Plan of child nodes
+
+        // Check that the schema of the plan matches the schema of this table.
+        if !self.schema().equivalent_names_and_types(&input_plan.schema()) {
+            return plan_err!("Updating query must have the same schema with the table.");
+        }
+        if overwrite {
+            return not_impl_err!("Overwrite not implemented for MemoryTable yet");
+        }
+        // return Physical Execution Plan
+        Ok(Arc::new(UpdateSinkExec::new(
+            input_plan,
+            Arc::new(self.clone().into_data_sink()),
+            self.schema.clone(),
+            None,
+        )))
+    }
+
+    async fn delete_from_table(
+        &self,
+        _state: &dyn Session,
+        input: Arc<dyn ExecutionPlan>,
+        overwrite: bool,
+    ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
+        // Create Physical Execution Plan for UPDATE node
+        // on top of Physical Execution Plan of child nodes
+
+        // Check that the schema of the plan matches the schema of this table.
+        if !self.schema().equivalent_names_and_types(&input.schema()) {
+            return plan_err!("Delete query must have the same schema with the table.");
+        }
+        if overwrite {
+            return not_impl_err!("Overwrite not implemented for MemoryTable yet");
+        }
+        // return Physical Execution Plan with a sink
+        // Sink will be executed, and written into RecordBatches
+        Ok(Arc::new(DeleteSinkExec::new(
             input,
             Arc::new(self.clone().into_data_sink()),
             self.schema.clone(),
@@ -573,6 +630,50 @@ impl DataSink for IcebergDataSink {
     }
 }
 
+#[async_trait]
+impl OverwriteSink for IcebergDataSink {
+    fn as_any(&self) -> &dyn Any {
+        self.0.as_any()
+    }
+
+    fn metrics(&self) -> Option<MetricsSet> {
+        None
+    }
+
+    async fn overwrite_with(
+        &self,
+        input_data: SendableRecordBatchStream,
+        _context: &Arc<TaskContext>,
+        filter: Option<Arc<dyn PhysicalExpr>>,
+        op: FilterOp
+    ) -> Result<u64, DataFusionError> {
+        let mut lock = self.0.tabular.write().await;
+        let table = if let Tabular::Table(table) = lock.deref_mut() {
+            Ok(table)
+        } else {
+            Err(Error::InvalidFormat("database entity".to_string()))
+        }
+            .map_err(Into::<Error>::into)?;
+
+        let object_store = table.object_store().clone();
+
+        let new_files = write_parquet_partitioned(
+            table.metadata(),
+            input_data.map_err(Into::into),
+            object_store.clone(),
+            self.0.branch.as_deref(),
+        )
+            .await?;
+
+        // STEP 1 : Delete the files where rows need to be changed
+        // STEP 2 : Append the new files
+        table.new_transaction(self.0.branch.as_deref())
+            .overwrite(filter, new_files, op)
+            .commit().await.map_err(Into::<Error>::into)?;
+
+        Ok(0)
+    }
+}
 #[cfg(test)]
 mod tests {
 
