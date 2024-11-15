@@ -23,13 +23,13 @@ async-trait = "0.1"
 chrono = { version = "0.4", default-features = false, features = ["serde", "clock"] }
 arrow = "53.2.0"
 arrow-schema = "53.2.0"
-datafusion = "43.0.0"
-datafusion-sql = "43.0.0"
-datafusion-expr = "43.0.0"
-datafusion-common = "43.0.0"
-datafusion-execution = "43.0.0"
-datafusion-functions = { version = "43.0.0", features = ["crypto_expressions"] }
-datafusion-functions-aggregate = "43.0.0"
+datafusion = { git = "https://github.com/dhruvils414/query-rust", branch = "upgrade" }
+datafusion-sql = { git = "https://github.com/dhruvils414/query-rust", branch = "upgrade" }
+datafusion-expr = { git = "https://github.com/dhruvils414/query-rust", branch = "upgrade" }
+datafusion-common = { git = "https://github.com/dhruvils414/query-rust", branch = "upgrade" }
+datafusion-execution = { git = "https://github.com/dhruvils414/query-rust", branch = "upgrade" }
+datafusion-functions = {git = "https://github.com/dhruvils414/query-rust", branch = "upgrade", features = ["crypto_expressions"] }
+datafusion-functions-aggregate = { git = "https://github.com/dhruvils414/query-rust", branch = "upgrade" }
 parquet = { version = "53.2.0", features = ["async", "object_store"] }
 sqlparser = { version = "0.51.0", features = ["visitor"] }
 thiserror = "1.0"
