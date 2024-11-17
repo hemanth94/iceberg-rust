@@ -14,6 +14,7 @@ apache-avro = { workspace = true }
 arrow-schema = { workspace = true }
 chrono = { workspace = true }
 itertools = { workspace = true }
+object_store = { workspace = true }
 murmur3 = "0.5.2"
 getrandom = "0.2.8"
 ordered-float = { version = "4.1.0", features = ["serde"] }

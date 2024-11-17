@@ -22,6 +22,7 @@ serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
 url = { workspace = true }
+datafusion = { workspace = true }
 uuid = { workspace = true }
 tokio = { version = "1.0", features = ["sync"] }
 derive_builder = "0.12.0"

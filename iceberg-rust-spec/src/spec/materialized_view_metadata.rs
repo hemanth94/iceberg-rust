@@ -2,8 +2,10 @@
  * A Struct for the materialized view metadata   
 */
 
+use crate::error::Error;
 use std::{collections::HashMap, ops::Deref};
 
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -17,6 +19,13 @@ pub static REFRESH_STATE: &str = "refresh-state";
 pub type MaterializedViewMetadata = GeneralViewMetadata<Identifier>;
 /// Builder for materialized view metadata
 pub type MaterializedViewMetadataBuilder = GeneralViewMetadataBuilder<Identifier>;
+
+pub fn depends_on_tables_to_string(source_tables: &[SourceTable]) -> Result<String, Error> {
+    Ok(source_tables
+        .iter()
+        .map(|x| x.uuid.to_string() + "=" + &x.snapshot_id.to_string())
+        .join(","))
+}
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "kebab-case")]
@@ -41,9 +50,9 @@ pub struct SourceViews(pub HashMap<(Uuid, Option<String>), i64>);
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct SourceTable {
-    uuid: Uuid,
-    snapshot_id: i64,
-    r#ref: Option<String>,
+    pub uuid: Uuid,
+    pub snapshot_id: i64,
+    pub r#ref: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]

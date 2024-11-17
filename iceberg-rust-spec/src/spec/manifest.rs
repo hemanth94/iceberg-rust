@@ -13,7 +13,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use crate::{error::Error, partition::BoundPartitionField};
 
 use super::{
-    partition::PartitionSpec,
+    partition::{PartitionField, PartitionSpec},
     schema::Schema,
     table_metadata::FormatVersion,
     types::{PrimitiveType, StructType, Type},
@@ -338,17 +338,26 @@ impl<'de> Deserialize<'de> for FileFormat {
 }
 
 /// Get schema for partition values depending on partition spec and table schema
-pub fn partition_value_schema(spec: &[BoundPartitionField<'_>]) -> Result<String, Error> {
+pub fn partition_value_schema(
+    spec: &[PartitionField],
+    table_schema: &Schema,
+) -> Result<String, Error> {
     Ok(spec
         .iter()
         .map(|field| {
-            let data_type = avro_schema_datatype(field.field_type());
+            let schema_field = table_schema
+                .fields()
+                .get(*field.source_id() as usize)
+                .ok_or_else(|| {
+                    Error::Schema(field.name().to_string(), format!("{:?}", &table_schema))
+                })?;
+            let data_type = avro_schema_datatype(&schema_field.field_type);
             Ok::<_, Error>(
                 r#"
                 {
                     "name": ""#
                     .to_owned()
-                    + field.name()
+                    + &schema_field.name
                     + r#"", 
                     "type":  ["null",""#
                     + &format!("{}", &data_type)
@@ -371,7 +380,6 @@ pub fn partition_value_schema(spec: &[BoundPartitionField<'_>]) -> Result<String
         .to_owned()
         + r#"]}"#)
 }
-
 fn avro_schema_datatype(data_type: &Type) -> Type {
     match data_type {
         Type::Primitive(prim) => match prim {
@@ -1326,11 +1334,15 @@ impl DataFileV2 {
 
 #[cfg(test)]
 mod tests {
-    use crate::spec::{
-        partition::{PartitionField, Transform},
-        table_metadata::TableMetadataBuilder,
-        types::{PrimitiveType, StructField, StructType, Type},
-        values::Value,
+    use crate::{
+        partition::PartitionSpecBuilder,
+        schema::SchemaV2,
+        spec::{
+            partition::{PartitionField, Transform},
+            table_metadata::TableMetadataBuilder,
+            types::{PrimitiveType, StructField, StructType, Type},
+            values::Value,
+        },
     };
 
     use super::*;
@@ -1396,9 +1408,11 @@ mod tests {
             },
         };
 
-        let partition_schema =
-            partition_value_schema(&table_metadata.current_partition_fields(None).unwrap())
-                .unwrap();
+        let partition_schema = partition_value_schema(
+            table_metadata.default_partition_spec().unwrap().fields(),
+            table_metadata.current_schema(None).unwrap(),
+        )
+        .unwrap();
 
         let schema = ManifestEntry::schema(&partition_schema, &FormatVersion::V2).unwrap();
 
@@ -1522,9 +1536,11 @@ mod tests {
             },
         };
 
-        let partition_schema =
-            partition_value_schema(&table_metadata.current_partition_fields(None).unwrap())
-                .unwrap();
+        let partition_schema = partition_value_schema(
+            table_metadata.default_partition_spec().unwrap().fields(),
+            table_metadata.current_schema(None).unwrap(),
+        )
+        .unwrap();
 
         let schema = ManifestEntry::schema(&partition_schema, &FormatVersion::V2).unwrap();
 
@@ -1591,17 +1607,26 @@ mod tests {
     pub fn test_partition_values() {
         let partition_values = Struct::from_iter(vec![("day".to_owned(), Some(Value::Int(1)))]);
 
-        let part_field = PartitionField::new(4, 1000, "day", Transform::Day);
-        let field = StructField {
-            id: 4,
-            name: "day".to_owned(),
-            required: false,
-            field_type: Type::Primitive(PrimitiveType::Int),
-            doc: None,
+        let table_schema = SchemaV2 {
+            schema_id: 0,
+            identifier_field_ids: None,
+            fields: StructType::new(vec![StructField {
+                id: 4,
+                name: "day".to_owned(),
+                required: false,
+                field_type: Type::Primitive(PrimitiveType::Int),
+                doc: None,
+            }]),
         };
-        let partition_fields = vec![BoundPartitionField::new(&part_field, &field)];
 
-        let raw_schema = partition_value_schema(&partition_fields).unwrap();
+        let spec = PartitionSpecBuilder::default()
+            .with_spec_id(0)
+            .with_partition_field(PartitionField::new(4, 1000, "day", Transform::Day))
+            .build()
+            .unwrap();
+
+        let raw_schema =
+            partition_value_schema(spec.fields(), &table_schema.try_into().unwrap()).unwrap();
 
         let schema = apache_avro::Schema::parse_str(&raw_schema).unwrap();
 

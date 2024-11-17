@@ -2,9 +2,14 @@
  * Manifest lists
 */
 
-use std::sync::OnceLock;
+use std::{
+    io::Read,
+    iter::{Map, Repeat, Zip},
+    sync::OnceLock,
+};
 
-use apache_avro::{types::Value as AvroValue, Schema as AvroSchema};
+use apache_avro::{types::Value as AvroValue, Reader, Schema as AvroSchema};
+
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -18,6 +23,13 @@ use super::{
     types::Type,
     values::Value,
 };
+
+type ReaderZip<'a, 'metadata, R> = Zip<Reader<'a, R>, Repeat<&'metadata TableMetadata>>;
+
+type ReaderMap<'a, 'metadata, R> = Map<
+    ReaderZip<'a, 'metadata, R>,
+    fn((Result<AvroValue, apache_avro::Error>, &TableMetadata)) -> Result<ManifestListEntry, Error>,
+>;
 
 #[derive(Debug, Serialize, PartialEq, Eq, Clone)]
 #[serde(into = "ManifestListEntryEnum")]
@@ -58,6 +70,11 @@ pub struct ManifestListEntry {
     pub key_metadata: Option<ByteBuf>,
 }
 
+/// Iterator of ManifestFileEntries
+pub struct ManifestListReader<'a, 'metadata, R: Read> {
+    reader: ReaderMap<'a, 'metadata, R>,
+}
+
 /// Entry in manifest file.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(untagged)]
@@ -95,9 +112,14 @@ pub enum Content {
 }
 
 mod _serde {
-    use crate::spec::table_metadata::FormatVersion;
+    use std::{io::Read, iter::repeat};
 
-    use super::{Content, FieldSummary, ManifestListEntry, ManifestListEntryEnum};
+    use crate::{error::Error, spec::table_metadata::FormatVersion, table_metadata::TableMetadata};
+
+    use super::{
+        Content, FieldSummary, ManifestListEntry, ManifestListEntryEnum, ManifestListReader,
+    };
+    use apache_avro::Reader;
     use serde::{Deserialize, Serialize};
     use serde_bytes::ByteBuf;
 
@@ -218,6 +240,27 @@ mod _serde {
                     .map(|v| v.into_iter().map(Into::into).collect()),
                 key_metadata: value.key_metadata,
             }
+        }
+    }
+
+    impl<'a, 'metadata, R: Read> Iterator for ManifestListReader<'a, 'metadata, R> {
+        type Item = Result<ManifestListEntry, Error>;
+        fn next(&mut self) -> Option<Self::Item> {
+            self.reader.next()
+        }
+    }
+
+    impl<'a, 'metadata, R: Read> ManifestListReader<'a, 'metadata, R> {
+        /// Create a new ManifestFile reader
+        pub fn new(
+            reader: R,
+            table_metadata: &'metadata TableMetadata,
+        ) -> Result<Self, apache_avro::Error> {
+            Ok(Self {
+                reader: Reader::new(reader)?
+                    .zip(repeat(table_metadata))
+                    .map(super::avro_value_to_manifest_file),
+            })
         }
     }
 
@@ -349,6 +392,280 @@ impl ManifestListEntry {
                 .transpose()?,
             key_metadata: entry.key_metadata,
         })
+    }
+
+    /// Get schema of the manifest list
+    pub fn schema(format_version: &FormatVersion) -> Result<AvroSchema, Error> {
+        let schema = match format_version {
+            FormatVersion::V1 => r#"
+    {
+        "type": "record",
+        "name": "manifest_file",
+        "fields": [
+            {
+                "name": "manifest_path",
+                "type": "string",
+                "field_id": 500
+            },
+            {
+                "name": "manifest_length",
+                "type": "long",
+                "field_id": 501
+            },
+            {
+                "name": "partition_spec_id",
+                "type": "int",
+                "field_id": 502
+            },
+            {
+                "name": "added_snapshot_id",
+                "type": "long",
+                "field_id": 503
+            },
+            {
+                "name": "added_files_count",
+                "type": [
+                    "null",
+                    "int"
+                ],
+                "default": null,
+                "field_id": 504
+            },
+            {
+                "name": "existing_files_count",
+                "type": [
+                    "null",
+                    "int"
+                ],
+                "default": null,
+                "field_id": 505
+            },
+            {
+                "name": "deleted_files_count",
+                "type": [
+                    "null",
+                    "int"
+                ],
+                "default": null,
+                "field_id": 506
+            },
+            {
+                "name": "added_rows_count",
+                "type": [
+                    "null",
+                    "long"
+                ],
+                "default": null,
+                "field_id": 512
+            },
+            {
+                "name": "existing_rows_count",
+                "type": [
+                    "null",
+                    "long"
+                ],
+                "default": null,
+                "field_id": 513
+            },
+            {
+                "name": "deleted_rows_count",
+                "type": [
+                    "null",
+                    "long"
+                ],
+                "default": null,
+                "field_id": 514
+            },
+            {
+                "name": "partitions",
+                "type": [
+                    "null",
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "record",
+                            "name": "r508",
+                            "fields": [
+                                {
+                                    "name": "contains_null",
+                                    "type": "boolean",
+                                    "field_id": 509
+                                },
+                                {
+                                    "name": "contains_nan",
+                                    "type": [
+                                        "null",
+                                        "boolean"
+                                    ],
+                                    "field_id": 518
+                                },
+                                {
+                                    "name": "lower_bound",
+                                    "type": [
+                                        "null",
+                                        "bytes"
+                                    ],
+                                    "field_id": 510
+                                },
+                                {
+                                    "name": "upper_bound",
+                                    "type": [
+                                        "null",
+                                        "bytes"
+                                    ],
+                                    "field_id": 511
+                                }
+                            ]
+                        },
+                        "element-id": 508
+                    }
+                ],
+                "default": null,
+                "field_id": 507
+            },
+            {
+                "name": "key_metadata",
+                "type": [
+                    "null",
+                    "bytes"
+                ],
+                "field_id": 519
+            }
+        ]
+    }
+    "#
+            .to_owned(),
+            &FormatVersion::V2 => r#"
+    {
+        "type": "record",
+        "name": "manifest_file",
+        "fields": [
+            {
+                "name": "manifest_path",
+                "type": "string",
+                "field_id": 500
+            },
+            {
+                "name": "manifest_length",
+                "type": "long",
+                "field_id": 501
+            },
+            {
+                "name": "partition_spec_id",
+                "type": "int",
+                "field_id": 502
+            },
+            {
+                "name": "content",
+                "type": "int",
+                "field_id": 517
+            },
+            {
+                "name": "sequence_number",
+                "type": "long",
+                "field_id": 515
+            },
+            {
+                "name": "min_sequence_number",
+                "type": "long",
+                "field_id": 516
+            },
+            {
+                "name": "added_snapshot_id",
+                "type": "long",
+                "field_id": 503
+            },
+            {
+                "name": "added_files_count",
+                "type": "int",
+                "field_id": 504
+            },
+            {
+                "name": "existing_files_count",
+                "type": "int",
+                "field_id": 505
+            },
+            {
+                "name": "deleted_files_count",
+                "type": "int",
+                "field_id": 506
+            },
+            {
+                "name": "added_rows_count",
+                "type": "long",
+                "field_id": 512
+            },
+            {
+                "name": "existing_rows_count",
+                "type": "long",
+                "field_id": 513
+            },
+            {
+                "name": "deleted_rows_count",
+                "type": "long",
+                "field_id": 514
+            },
+            {
+                "name": "partitions",
+                "type": [
+                    "null",
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "record",
+                            "name": "r508",
+                            "fields": [
+                                {
+                                    "name": "contains_null",
+                                    "type": "boolean",
+                                    "field_id": 509
+                                },
+                                {
+                                    "name": "contains_nan",
+                                    "type": [
+                                        "null",
+                                        "boolean"
+                                    ],
+                                    "field_id": 518
+                                },
+                                {
+                                    "name": "lower_bound",
+                                    "type": [
+                                        "null",
+                                        "bytes"
+                                    ],
+                                    "field_id": 510
+                                },
+                                {
+                                    "name": "upper_bound",
+                                    "type": [
+                                        "null",
+                                        "bytes"
+                                    ],
+                                    "field_id": 511
+                                }
+                            ]
+                        },
+                        "element-id": 508
+                    }
+                ],
+                "default": null,
+                "field_id": 507
+            },
+            {
+                "name": "key_metadata",
+                "type": [
+                    "null",
+                    "bytes"
+                ],
+                "field_id": 519
+            }
+        ]
+    }
+    "#
+            .to_owned(),
+        };
+        AvroSchema::parse_str(&schema).map_err(Into::into)
     }
 }
 
@@ -657,6 +974,24 @@ pub fn avro_value_to_manifest_list_entry(
     table_metadata: &TableMetadata,
 ) -> Result<ManifestListEntry, Error> {
     let entry = value?;
+    match table_metadata.format_version {
+        FormatVersion::V1 => ManifestListEntry::try_from_v1(
+            apache_avro::from_value::<_serde::ManifestListEntryV1>(&entry)?,
+            table_metadata,
+        ),
+        FormatVersion::V2 => ManifestListEntry::try_from_v2(
+            apache_avro::from_value::<_serde::ManifestListEntryV2>(&entry)?,
+            table_metadata,
+        ),
+    }
+}
+
+/// Convert an avro value to a [ManifestFile] according to the provided format version
+pub(crate) fn avro_value_to_manifest_file(
+    value: (Result<AvroValue, apache_avro::Error>, &TableMetadata),
+) -> Result<ManifestListEntry, Error> {
+    let entry = value.0?;
+    let table_metadata = value.1;
     match table_metadata.format_version {
         FormatVersion::V1 => ManifestListEntry::try_from_v1(
             apache_avro::from_value::<_serde::ManifestListEntryV1>(&entry)?,

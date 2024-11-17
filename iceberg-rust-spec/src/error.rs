@@ -82,4 +82,7 @@ pub enum Error {
     /// partition spec builder
     #[error(transparent)]
     PartitionSpec(#[from] crate::spec::partition::PartitionSpecBuilderError),
+    /// object_store builder
+    #[error(transparent)]
+    ObjectStore(#[from] object_store::Error),
 }

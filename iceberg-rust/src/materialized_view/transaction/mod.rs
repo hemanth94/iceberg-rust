@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use iceberg_rust_spec::{
-    materialized_view_metadata::{RefreshState, REFRESH_STATE},
+    materialized_view_metadata::{RefreshState, SourceTable, REFRESH_STATE},
     spec::{manifest::DataFile, types::StructType, view_metadata::ViewRepresentation},
 };
 
@@ -68,30 +68,62 @@ impl<'view> Transaction<'view> {
         files: Vec<DataFile>,
         refresh_state: RefreshState,
     ) -> Result<Self, Error> {
-        let refresh_state = serde_json::to_string(&refresh_state)?;
+        // let refresh_state = serde_json::to_string(&refresh_state)?;
         self.storage_table_operations
             .entry(REWRITE_KEY.to_owned())
             .and_modify(|mut x| {
                 if let TableOperation::Rewrite {
                     branch: _,
                     files: old,
-                    additional_summary: old_lineage,
+                    // additional_summary: old_lineage,
+                    lineage: old_lineage,
                 } = &mut x
                 {
                     old.extend_from_slice(&files);
-                    *old_lineage = Some(HashMap::from_iter(vec![(
-                        REFRESH_STATE.to_owned(),
-                        refresh_state.clone(),
-                    )]));
+                    // *old_lineage = Some(HashMap::from_iter(vec![(
+                    //     REFRESH_STATE.to_owned(),
+                    //     refresh_state.clone(),
+                    // )]));
+
+                    *old_lineage = Some(
+                        refresh_state
+                            .source_table_states
+                            .0
+                            .iter()
+                            .map(|x| {
+                                let source_table = SourceTable {
+                                    uuid: x.0 .0,
+                                    snapshot_id: *x.1,
+                                    r#ref: x.0 .1.clone(),
+                                };
+                                source_table
+                            })
+                            .collect(),
+                    )
                 }
             })
             .or_insert(TableOperation::Rewrite {
                 branch: self.branch.clone(),
                 files,
-                additional_summary: Some(HashMap::from_iter(vec![(
-                    REFRESH_STATE.to_owned(),
-                    refresh_state,
-                )])),
+                // additional_summary: Some(HashMap::from_iter(vec![(
+                //     REFRESH_STATE.to_owned(),
+                //     refresh_state,
+                // )])),
+                lineage: Some(
+                    refresh_state
+                        .source_table_states
+                        .0
+                        .iter()
+                        .map(|x| {
+                            let source_table = SourceTable {
+                                uuid: x.0 .0,
+                                snapshot_id: *x.1,
+                                r#ref: x.0 .1.clone(),
+                            };
+                            source_table
+                        })
+                        .collect(),
+                ),
             });
         Ok(self)
     }
@@ -122,6 +154,7 @@ impl<'view> Transaction<'view> {
             for operation in self.storage_table_operations.into_values() {
                 let (requirement, update) = operation
                     .execute(
+                        &storage_table,
                         storage_table.metadata(),
                         self.materialized_view.object_store(),
                     )

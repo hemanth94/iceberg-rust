@@ -25,7 +25,6 @@ use datafusion::{
         listing::PartitionedFile,
         object_store::ObjectStoreUrl,
         physical_plan::FileScanConfig,
-
         TableProvider, ViewTable,
     },
     execution::{context::SessionState, TaskContext},
@@ -33,10 +32,10 @@ use datafusion::{
     physical_expr::create_physical_expr,
     physical_optimizer::pruning::PruningPredicate,
     physical_plan::{
-        insert::{DataSink, DataSinkExec},
-        upsert::{OverwriteSink, UpdateSinkExec},
         delete::DeleteSinkExec,
+        insert::{DataSink, DataSinkExec},
         metrics::MetricsSet,
+        upsert::{OverwriteSink, UpdateSinkExec},
         DisplayAs, DisplayFormatType, ExecutionPlan, SendableRecordBatchStream, Statistics,
     },
     prelude::Expr,
@@ -251,7 +250,10 @@ impl TableProvider for DataFusionTable {
         // on top of Physical Execution Plan of child nodes
 
         // Check that the schema of the plan matches the schema of this table.
-        if !self.schema().equivalent_names_and_types(&input_plan.schema()) {
+        if !self
+            .schema()
+            .equivalent_names_and_types(&input_plan.schema())
+        {
             return plan_err!("Updating query must have the same schema with the table.");
         }
         if overwrite {
@@ -438,7 +440,7 @@ async fn table_scan(
                         range: None,
                         statistics: Some(manifest_statistics),
                         extensions: None,
-                        metadata_size_hint: None
+                        metadata_size_hint: None,
                     };
                     file_groups
                         .entry(file.partition_values.clone())
@@ -488,7 +490,7 @@ async fn table_scan(
                     range: None,
                     statistics: Some(manifest_statistics),
                     extensions: None,
-                    metadata_size_hint: None
+                    metadata_size_hint: None,
                 };
                 file_groups
                     .entry(file.partition_values.clone())
@@ -645,7 +647,7 @@ impl OverwriteSink for IcebergDataSink {
         input_data: SendableRecordBatchStream,
         _context: &Arc<TaskContext>,
         filter: Option<Arc<dyn PhysicalExpr>>,
-        op: FilterOp
+        op: FilterOp,
     ) -> Result<u64, DataFusionError> {
         let mut lock = self.0.tabular.write().await;
         let table = if let Tabular::Table(table) = lock.deref_mut() {
@@ -653,7 +655,7 @@ impl OverwriteSink for IcebergDataSink {
         } else {
             Err(Error::InvalidFormat("database entity".to_string()))
         }
-            .map_err(Into::<Error>::into)?;
+        .map_err(Into::<Error>::into)?;
 
         let object_store = table.object_store().clone();
 
@@ -663,13 +665,16 @@ impl OverwriteSink for IcebergDataSink {
             object_store.clone(),
             self.0.branch.as_deref(),
         )
-            .await?;
+        .await?;
 
         // STEP 1 : Delete the files where rows need to be changed
         // STEP 2 : Append the new files
-        table.new_transaction(self.0.branch.as_deref())
-            .overwrite(filter, new_files, op)
-            .commit().await.map_err(Into::<Error>::into)?;
+        table
+            .new_transaction(self.0.branch.as_deref())
+            .overwrite(filter, new_files)
+            .commit()
+            .await
+            .map_err(Into::<Error>::into)?;
 
         Ok(0)
     }

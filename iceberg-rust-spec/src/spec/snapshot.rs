@@ -1,6 +1,8 @@
 /*!
  * Snapshots
 */
+use std::io::Cursor;
+use std::sync::Arc;
 use std::{
     collections::HashMap,
     fmt, str,
@@ -12,8 +14,15 @@ use derive_getters::Getters;
 use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
+use crate::util;
+use object_store::ObjectStore;
 
 use _serde::SnapshotEnum;
+
+use super::manifest_list::{ManifestListEntry, ManifestListReader};
+use super::table_metadata::TableMetadata;
+
+pub static DEPENDS_ON_TABLES: &str = "depends_on_tables";
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Builder, Getters)]
 #[serde(from = "SnapshotEnum", into = "SnapshotEnum")]
@@ -67,6 +76,28 @@ impl str::FromStr for Snapshot {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         serde_json::from_str(s).map_err(Error::from)
+    }
+}
+
+impl Snapshot {
+    // Return all manifest files associated to the latest table snapshot. Reads the related manifest_list file and returns its entries.
+    // If the manifest list file is empty returns an empty vector.
+    pub async fn manifests<'metadata>(
+        &self,
+        table_metadata: &'metadata TableMetadata,
+        object_store: Arc<dyn ObjectStore>,
+    ) -> Result<impl Iterator<Item = Result<ManifestListEntry, Error>> + 'metadata, Error> {
+        let bytes: Cursor<Vec<u8>> = Cursor::new(
+            object_store
+                .get(&util::strip_prefix(&self.manifest_list).into())
+                .await
+                .map_err(Error::from)?
+                .bytes()
+                .await
+                .map_err(Error::from)?
+                .into(),
+        );
+        ManifestListReader::new(bytes, table_metadata).map_err(Into::into)
     }
 }
 

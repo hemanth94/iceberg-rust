@@ -2,6 +2,7 @@
 Defining the [Table] struct that represents an iceberg table.
 */
 
+use std::iter::repeat;
 use std::{io::Cursor, sync::Arc};
 
 use manifest::ManifestReader;
@@ -33,6 +34,7 @@ use crate::{
 
 pub mod manifest;
 pub mod manifest_list;
+pub mod pruning_statistics;
 pub mod transaction;
 
 #[derive(Debug)]
@@ -149,7 +151,7 @@ impl Table {
         &self,
         manifests: &[ManifestListEntry],
         filter: Option<Vec<bool>>,
-    ) -> Result<impl Stream<Item = Result<ManifestEntry, Error>>, Error> {
+    ) -> Result<Vec<ManifestEntry>, Error> {
         datafiles(self.object_store(), manifests, filter).await
     }
     /// Check if datafiles contain deletes
@@ -160,9 +162,9 @@ impl Table {
     ) -> Result<bool, Error> {
         let manifests = self.manifests(start, end).await?;
         let datafiles = self.datafiles(&manifests, None).await?;
-        datafiles
-            .try_any(|entry| async move { !matches!(entry.data_file().content(), Content::Data) })
-            .await
+        Ok(datafiles
+            .iter()
+            .any(|entry| !matches!(entry.data_file().content(), Content::Data)))
     }
     /// Create a new transaction for this table
     pub fn new_transaction(&mut self, branch: Option<&str>) -> TableTransaction {
@@ -174,27 +176,27 @@ async fn datafiles(
     object_store: Arc<dyn ObjectStore>,
     manifests: &[ManifestListEntry],
     filter: Option<Vec<bool>>,
-) -> Result<impl Stream<Item = Result<ManifestEntry, Error>>, Error> {
+) -> Result<Vec<ManifestEntry>, Error> {
     // filter manifest files according to filter vector
-    let iter: Box<dyn Iterator<Item = &ManifestListEntry> + Send + Sync> = match filter {
-        Some(predicate) => {
-            let iter = manifests
-                .iter()
-                .zip(predicate.into_iter())
-                .filter(|(_, predicate)| *predicate)
-                .map(|(manifest, _)| manifest);
-            Box::new(iter)
-        }
-        None => Box::new(manifests.iter()),
+    let iter = match filter {
+        Some(predicate) => manifests
+            .iter()
+            .zip(Box::new(predicate.into_iter()) as Box<dyn Iterator<Item = bool> + Send + Sync>)
+            .filter_map(
+                filter_manifest as fn((&ManifestListEntry, bool)) -> Option<&ManifestListEntry>,
+            ),
+        None => manifests
+            .iter()
+            .zip(Box::new(repeat(true)) as Box<dyn Iterator<Item = bool> + Send + Sync>)
+            .filter_map(
+                filter_manifest as fn((&ManifestListEntry, bool)) -> Option<&ManifestListEntry>,
+            ),
     };
 
-    let (sender, reciever) = unbounded();
     // Collect a vector of data files by creating a stream over the manifst files, fetch their content and return a flatten stream over their entries.
-    stream::iter(iter)
-        .map(Ok::<_, Error>)
-        .try_for_each_concurrent(None, |file| {
+    let datafiles: Vec<ManifestEntry> = stream::iter(iter)
+        .map(|file| {
             let object_store = object_store.clone();
-            let mut sender = sender.clone();
             async move {
                 let path: Path = util::strip_prefix(&file.manifest_path).into();
                 let bytes = Cursor::new(Vec::from(
@@ -204,15 +206,28 @@ async fn datafiles(
                         .await?,
                 ));
                 let reader = ManifestReader::new(bytes)?;
-                sender.send(stream::iter(reader)).await?;
-                Ok(())
+                Ok(stream::iter(reader))
             }
         })
-        .await?;
-    sender.close_channel();
-    Ok(reciever.flatten().map_err(Error::from))
+        .flat_map(|reader| reader.try_flatten_stream())
+        .try_collect()
+        .await
+        .map_err(Error::from)?;
+
+    Ok(datafiles)
 }
 
+#[inline]
+// Filter manifest files according to predicate. Returns Some(&ManifestFile) of the predicate is true and None if it is false.
+fn filter_manifest(
+    (manifest, predicate): (&ManifestListEntry, bool),
+) -> Option<&ManifestListEntry> {
+    if predicate {
+        Some(manifest)
+    } else {
+        None
+    }
+}
 /// delete all datafiles, manifests and metadata files, does not remove table from catalog
 pub(crate) async fn delete_files(
     metadata: &TableMetadata,
@@ -221,15 +236,15 @@ pub(crate) async fn delete_files(
     let Some(snapshot) = metadata.current_snapshot(None)? else {
         return Ok(());
     };
-    let manifests: Vec<ManifestListEntry> = read_snapshot(snapshot, metadata, object_store.clone())
+    let manifests = snapshot
+        .manifests(metadata, object_store.clone())
         .await?
-        .collect::<Result<_, _>>()?;
-
+        .collect::<Result<Vec<_>, iceberg_rust_spec::error::Error>>()?;
     let datafiles = datafiles(object_store.clone(), &manifests, None).await?;
     let snapshots = &metadata.snapshots;
 
-    // stream::iter(datafiles.into_iter())
-    datafiles
+    stream::iter(datafiles.into_iter())
+        .map(Ok::<_, Error>)
         .try_for_each_concurrent(None, |datafile| {
             let object_store = object_store.clone();
             async move {
